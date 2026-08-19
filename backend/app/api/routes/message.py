@@ -96,18 +96,19 @@ def create_message(
     db.refresh(user_message)
 
     try:
-        # 4. Send current message + previous history to Gemini
-        ai_response = ai_service.generate_response(
-            user_message=data.content,
-            conversation_history=conversation_history,
-        )
+    # 4. Send current message + previous history to Gemini
+       ai_response = ai_service.generate_response(
+          user_message=data.content,
+          conversation_history=conversation_history,
+    )
 
     except Exception as e:
-        # Don't crash the API if Gemini fails
-        raise HTTPException(
-            status_code=503,
-            detail=f"AI service unavailable: {str(e)}",
-        )
+         print(f"AI service error: {e}")
+
+         raise HTTPException(
+           status_code=503,
+           detail="AI service is temporarily unavailable. Please try again.",
+    )
 
     # 5. Save assistant response
     assistant_message = Message(
