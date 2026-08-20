@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from fastapi.responses import StreamingResponse
+import json
 
 from app.core.database import get_db
 from app.models.conversation import Conversation
@@ -103,9 +105,9 @@ def create_message(
     )
 
     except Exception as e:
-         print(f"AI service error: {e}")
+        print(f"AI service error: {e}")
 
-         raise HTTPException(
+        raise HTTPException(
            status_code=503,
            detail="AI service is temporarily unavailable. Please try again.",
     )
@@ -126,3 +128,152 @@ def create_message(
         user_message,
         assistant_message,
     ]
+
+@router.post(
+    "/{conversation_id}/messages/stream",
+)
+def create_message_stream(
+    conversation_id: int,
+    data: MessageCreate,
+    db: Session = Depends(get_db),
+):
+    # ========================================================
+    # 1. CHECK CONVERSATION
+    # ========================================================
+
+    conversation = (
+        db.query(Conversation)
+        .filter(
+            Conversation.id == conversation_id
+        )
+        .first()
+    )
+
+    if conversation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found",
+        )
+
+    # ========================================================
+    # 2. LOAD RECENT HISTORY
+    # ========================================================
+
+    previous_messages = (
+        db.query(Message)
+        .filter(
+            Message.conversation_id == conversation_id
+        )
+        .order_by(Message.created_at.desc())
+        .limit(12)
+        .all()
+    )
+
+    previous_messages.reverse()
+
+    conversation_history = [
+        {
+            "role": message.role,
+            "content": message.content,
+        }
+        for message in previous_messages
+    ]
+
+    # ========================================================
+    # 3. SAVE USER MESSAGE
+    # ========================================================
+
+    user_message = Message(
+        conversation_id=conversation_id,
+        role="user",
+        content=data.content,
+    )
+
+    db.add(user_message)
+    db.commit()
+    db.refresh(user_message)
+
+    # ========================================================
+    # 4. STREAM GEMINI RESPONSE
+    # ========================================================
+
+    def generate():
+
+        full_response = ""
+
+        try:
+
+            for chunk in ai_service.generate_response_stream(
+                user_message=data.content,
+                conversation_history=conversation_history,
+            ):
+
+                full_response += chunk
+
+                yield (
+                    f"data: "
+                    f"{json.dumps({'type': 'chunk', 'content': chunk})}"
+                    "\n\n"
+                )
+
+            # =================================================
+            # 5. SAVE COMPLETE AI RESPONSE
+            # =================================================
+
+            assistant_message = Message(
+                conversation_id=conversation_id,
+                role="assistant",
+                content=full_response,
+            )
+
+            db.add(assistant_message)
+            db.commit()
+            db.refresh(assistant_message)
+
+            # =================================================
+            # 6. SEND COMPLETION EVENT
+            # =================================================
+
+            yield (
+                "data: "
+                + json.dumps(
+                    {
+                        "type": "done",
+                        "message": {
+                            "id": assistant_message.id,
+                            "conversation_id": conversation_id,
+                            "role": "assistant",
+                            "content": full_response,
+                        },
+                    }
+                )
+                + "\n\n"
+            )
+
+        except Exception as e:
+
+            db.rollback()
+
+            yield (
+                "data: "
+                + json.dumps(
+                    {
+                        "type": "error",
+                        "message": (
+                            "AI service temporarily "
+                            "unavailable."
+                        ),
+                    }
+                )
+                + "\n\n"
+            )
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

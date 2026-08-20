@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.api.routes import users, conversations, message
 
 
 app = FastAPI(
@@ -10,7 +11,10 @@ app = FastAPI(
 )
 
 
-# Allow frontend to communicate with backend
+# ============================================================
+# CORS
+# ============================================================
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -22,6 +26,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ============================================================
+# API ROUTES
+# ============================================================
+
+app.include_router(
+    users.router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    conversations.router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    message.router,
+    prefix="/api/v1",
+)
+
+
+# ============================================================
+# HEALTH CHECK
+# ============================================================
 
 @app.get("/health")
 def health_check():

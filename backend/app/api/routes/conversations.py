@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends,HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.user import User
 from app.models.conversation import Conversation
+
 from app.schemas.conversation import (
     ConversationCreate,
+    ConversationUpdate,
     ConversationResponse,
 )
 
@@ -16,6 +18,10 @@ router = APIRouter(
 )
 
 
+# ============================================================
+# CREATE CONVERSATION
+# ============================================================
+
 @router.post(
     "",
     response_model=ConversationResponse,
@@ -24,6 +30,20 @@ def create_conversation(
     data: ConversationCreate,
     db: Session = Depends(get_db),
 ):
+
+    # Check that user exists
+    user = (
+        db.query(User)
+        .filter(User.id == data.user_id)
+        .first()
+    )
+
+    if user is None:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
     conversation = Conversation(
         user_id=data.user_id,
         title=data.title,
@@ -32,7 +52,13 @@ def create_conversation(
     db.add(conversation)
     db.commit()
     db.refresh(conversation)
+
     return conversation
+
+
+# ============================================================
+# GET USER CONVERSATIONS
+# ============================================================
 
 @router.get(
     "/user/{user_id}",
@@ -42,7 +68,7 @@ def get_user_conversations(
     user_id: int,
     db: Session = Depends(get_db),
 ):
-    # Check that the user exists
+
     user = (
         db.query(User)
         .filter(User.id == user_id)
@@ -55,12 +81,116 @@ def get_user_conversations(
             detail="User not found",
         )
 
-    # Get all conversations belonging to the user
     conversations = (
         db.query(Conversation)
-        .filter(Conversation.user_id == user_id)
-        .order_by(Conversation.created_at.desc())
+        .filter(
+            Conversation.user_id == user_id
+        )
+        .order_by(
+            Conversation.created_at.desc()
+        )
         .all()
     )
 
     return conversations
+
+
+# ============================================================
+# GET SINGLE CONVERSATION
+# ============================================================
+
+@router.get(
+    "/{conversation_id}",
+    response_model=ConversationResponse,
+)
+def get_conversation(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+):
+
+    conversation = (
+        db.query(Conversation)
+        .filter(
+            Conversation.id == conversation_id
+        )
+        .first()
+    )
+
+    if conversation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found",
+        )
+
+    return conversation
+
+
+# ============================================================
+# RENAME CONVERSATION
+# ============================================================
+
+@router.patch(
+    "/{conversation_id}",
+    response_model=ConversationResponse,
+)
+def update_conversation(
+    conversation_id: int,
+    data: ConversationUpdate,
+    db: Session = Depends(get_db),
+):
+
+    conversation = (
+        db.query(Conversation)
+        .filter(
+            Conversation.id == conversation_id
+        )
+        .first()
+    )
+
+    if conversation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found",
+        )
+
+    conversation.title = data.title
+
+    db.commit()
+    db.refresh(conversation)
+
+    return conversation
+
+
+# ============================================================
+# DELETE CONVERSATION
+# ============================================================
+
+@router.delete(
+    "/{conversation_id}",
+)
+def delete_conversation(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+):
+
+    conversation = (
+        db.query(Conversation)
+        .filter(
+            Conversation.id == conversation_id
+        )
+        .first()
+    )
+
+    if conversation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found",
+        )
+
+    db.delete(conversation)
+    db.commit()
+
+    return {
+        "message": "Conversation deleted successfully",
+        "conversation_id": conversation_id,
+    }
