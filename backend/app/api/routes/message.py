@@ -7,8 +7,7 @@ from app.core.database import get_db
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.schemas.message import MessageCreate, MessageResponse
-from app.services.ai_service import ai_service
-
+from app.services.llm_service import llm_service
 
 router = APIRouter(
     prefix="/conversations",
@@ -99,7 +98,7 @@ def create_message(
 
     try:
     # 4. Send current message + previous history to Gemini
-       ai_response = ai_service.generate_response(
+       ai_response = llm_service.generate_response(
           user_message=data.content,
           conversation_history=conversation_history,
     )
@@ -203,7 +202,7 @@ def create_message_stream(
 
         try:
 
-            for chunk in ai_service.generate_response_stream(
+            for chunk in llm_service.generate_response_stream(
                 user_message=data.content,
                 conversation_history=conversation_history,
             ):

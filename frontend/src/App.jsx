@@ -4,12 +4,8 @@ import remarkGfm from "remark-gfm";
 import "./App.css";
 
 const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
-const USER_ID = 1;
 
-const WELCOME_MESSAGE = {
-  role: "assistant",
-  content: "Hello! I'm NEXA AI. How can I help you today?",
-};
+const USER_ID = 1;
 
 function App() {
   // ============================================================
@@ -23,7 +19,8 @@ function App() {
   const [messages, setMessages] = useState([
     {
       id: "welcome",
-      ...WELCOME_MESSAGE,
+      role: "assistant",
+      content: "Hello! I'm NEXA AI. How can I help you today?",
     },
   ]);
 
@@ -92,10 +89,8 @@ function App() {
       );
 
       if (!response.ok) {
-        const errorText = await response.text();
-
         throw new Error(
-          errorText || "Could not load conversation history"
+          "Could not load conversation history"
         );
       }
 
@@ -110,33 +105,14 @@ function App() {
         return [];
       }
 
-      /*
-       * Keep backend order.
-       *
-       * If your backend returns updated_at, this additionally
-       * puts recently updated conversations first.
-       */
-      const sortedConversations = [...data].sort(
-        (a, b) => {
-          if (!a.updated_at || !b.updated_at) {
-            return 0;
-          }
-
-          return (
-            new Date(b.updated_at) -
-            new Date(a.updated_at)
-          );
-        }
-      );
-
-      setConversations(sortedConversations);
+      setConversations(data);
 
       console.log(
         "Conversation history refreshed:",
-        sortedConversations
+        data
       );
 
-      return sortedConversations;
+      return data;
     } catch (error) {
       console.error(
         "Conversation history error:",
@@ -156,7 +132,7 @@ function App() {
       const data = await loadConversations();
 
       // --------------------------------------------------------
-      // Existing conversations
+      // Existing conversation
       // --------------------------------------------------------
 
       if (data.length > 0) {
@@ -177,12 +153,8 @@ function App() {
       }
 
       // --------------------------------------------------------
-      // No conversations
+      // No conversation exists
       // --------------------------------------------------------
-
-      console.log(
-        "No conversations found. Creating first conversation."
-      );
 
       await createConversation();
     } catch (error) {
@@ -225,37 +197,32 @@ function App() {
         );
       }
 
-      const conversation =
-        await response.json();
+      const conversation = await response.json();
 
-      console.log(
-        "NEXA AI conversation created:",
-        conversation
-      );
-
-      // Add new conversation to top
       setConversations((previous) => [
         conversation,
-        ...previous.filter(
-          (item) =>
-            item.id !== conversation.id
-        ),
+        ...previous,
       ]);
 
-      setConversationId(
-        conversation.id
-      );
+      setConversationId(conversation.id);
 
       setMessages([
         {
-          id: `welcome-${conversation.id}`,
-          ...WELCOME_MESSAGE,
+          id: "welcome",
+          role: "assistant",
+          content:
+            "Hello! I'm NEXA AI. How can I help you today?",
         },
       ]);
 
       setInput("");
 
       resetTextarea();
+
+      console.log(
+        "NEXA AI conversation created:",
+        conversation.id
+      );
 
       return conversation;
     } catch (error) {
@@ -304,7 +271,7 @@ function App() {
       );
 
       // --------------------------------------------------------
-      // Invalid response
+      // Backend must return an array
       // --------------------------------------------------------
 
       if (!Array.isArray(data)) {
@@ -316,7 +283,9 @@ function App() {
         setMessages([
           {
             id: `welcome-${conversationIdToLoad}`,
-            ...WELCOME_MESSAGE,
+            role: "assistant",
+            content:
+              "Hello! I'm NEXA AI. How can I help you today?",
           },
         ]);
 
@@ -324,14 +293,16 @@ function App() {
       }
 
       // --------------------------------------------------------
-      // Empty conversation
+      // No previous messages
       // --------------------------------------------------------
 
       if (data.length === 0) {
         setMessages([
           {
             id: `welcome-${conversationIdToLoad}`,
-            ...WELCOME_MESSAGE,
+            role: "assistant",
+            content:
+              "Hello! I'm NEXA AI. How can I help you today?",
           },
         ]);
 
@@ -339,7 +310,7 @@ function App() {
       }
 
       // --------------------------------------------------------
-      // Convert backend messages to frontend format
+      // Load existing messages
       // --------------------------------------------------------
 
       const historyMessages = data.map(
@@ -360,130 +331,11 @@ function App() {
       setMessages([
         {
           id: `welcome-${conversationIdToLoad}`,
-          ...WELCOME_MESSAGE,
+          role: "assistant",
+          content:
+            "Hello! I'm NEXA AI. How can I help you today?",
         },
       ]);
-    }
-  }
-
-  // ============================================================
-  // CREATE TITLE FROM FIRST MESSAGE
-  // ============================================================
-
-  function generateConversationTitle(text) {
-    let title = text.trim();
-
-    /*
-     * Remove excessive whitespace.
-     */
-    title = title.replace(/\s+/g, " ");
-
-    /*
-     * Keep sidebar titles short.
-     */
-    const maxLength = 45;
-
-    if (title.length > maxLength) {
-      title =
-        title.substring(0, maxLength).trim() +
-        "...";
-    }
-
-    return title || "New Conversation";
-  }
-
-  // ============================================================
-  // UPDATE CONVERSATION TITLE
-  // ============================================================
-
-  async function updateConversationTitle(
-    conversationIdToUpdate,
-    firstMessage
-  ) {
-    const conversation =
-      conversations.find(
-        (item) =>
-          item.id ===
-          conversationIdToUpdate
-      );
-
-    /*
-     * Only automatically rename chats that still have
-     * the default title.
-     *
-     * This means manually renamed conversations are safe.
-     */
-    if (
-      conversation &&
-      conversation.title &&
-      conversation.title !==
-        "New Conversation"
-    ) {
-      return;
-    }
-
-    const title =
-      generateConversationTitle(
-        firstMessage
-      );
-
-    if (
-      !title ||
-      title === "New Conversation"
-    ) {
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/conversations/${conversationIdToUpdate}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type":
-              "application/json",
-            Accept:
-              "application/json",
-          },
-          body: JSON.stringify({
-            title,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorText =
-          await response.text();
-
-        throw new Error(
-          errorText ||
-            "Could not update conversation title"
-        );
-      }
-
-      const updated =
-        await response.json();
-
-      console.log(
-        "Conversation title updated:",
-        updated
-      );
-
-      setConversations(
-        (previous) =>
-          previous.map(
-            (conversationItem) =>
-              conversationItem.id ===
-              conversationIdToUpdate
-                ? updated
-                : conversationItem
-          )
-      );
-    } catch (error) {
-      console.error(
-        "Conversation title update error:",
-        error
-      );
     }
   }
 
@@ -496,14 +348,9 @@ function App() {
       return;
     }
 
-    const conversation =
-      await createConversation(
-        "New Conversation"
-      );
+    await createConversation("New Conversation");
 
-    if (conversation) {
-      setSidebarOpen(false);
-    }
+    setSidebarOpen(false);
   }
 
   // ============================================================
@@ -523,10 +370,6 @@ function App() {
 
     setSidebarOpen(false);
 
-    /*
-     * Clear current messages while loading
-     * selected conversation history.
-     */
     setMessages([]);
 
     console.log(
@@ -542,20 +385,15 @@ function App() {
   // ============================================================
 
   function startRename(conversation) {
-    setEditingConversationId(
-      conversation.id
-    );
+    setEditingConversationId(conversation.id);
 
-    setEditingTitle(
-      conversation.title || ""
-    );
+    setEditingTitle(conversation.title);
   }
 
   async function saveRename(
     conversationIdToRename
   ) {
-    const title =
-      editingTitle.trim();
+    const title = editingTitle.trim();
 
     if (!title) {
       setEditingConversationId(null);
@@ -568,10 +406,8 @@ function App() {
         {
           method: "PATCH",
           headers: {
-            "Content-Type":
-              "application/json",
-            Accept:
-              "application/json",
+            "Content-Type": "application/json",
+            Accept: "application/json",
           },
           body: JSON.stringify({
             title,
@@ -580,27 +416,21 @@ function App() {
       );
 
       if (!response.ok) {
-        const errorText =
-          await response.text();
-
         throw new Error(
-          errorText ||
-            "Could not rename conversation"
+          "Could not rename conversation"
         );
       }
 
-      const updated =
-        await response.json();
+      const updated = await response.json();
 
-      setConversations(
-        (previous) =>
-          previous.map(
-            (conversation) =>
-              conversation.id ===
-              conversationIdToRename
-                ? updated
-                : conversation
-          )
+      setConversations((previous) =>
+        previous.map(
+          (conversation) =>
+            conversation.id ===
+            conversationIdToRename
+              ? updated
+              : conversation
+        )
       );
 
       setEditingConversationId(null);
@@ -625,10 +455,9 @@ function App() {
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        "Delete this conversation?"
-      );
+    const confirmed = window.confirm(
+      "Delete this conversation?"
+    );
 
     if (!confirmed) {
       return;
@@ -646,25 +475,18 @@ function App() {
       );
 
       if (!response.ok) {
-        const errorText =
-          await response.text();
-
         throw new Error(
-          errorText ||
-            "Could not delete conversation"
+          "Could not delete conversation"
         );
       }
 
-      const remaining =
-        conversations.filter(
-          (conversation) =>
-            conversation.id !==
-            conversationIdToDelete
-        );
-
-      setConversations(
-        remaining
+      const remaining = conversations.filter(
+        (conversation) =>
+          conversation.id !==
+          conversationIdToDelete
       );
+
+      setConversations(remaining);
 
       // --------------------------------------------------------
       // Deleted current conversation
@@ -675,15 +497,10 @@ function App() {
         conversationIdToDelete
       ) {
         if (remaining.length > 0) {
-          const nextConversation =
-            remaining[0];
-
-          setConversationId(
-            nextConversation.id
-          );
+          setConversationId(remaining[0].id);
 
           await loadConversationMessages(
-            nextConversation.id
+            remaining[0].id
           );
         } else {
           await createConversation();
@@ -702,8 +519,7 @@ function App() {
   // ============================================================
 
   function resizeTextarea() {
-    const textarea =
-      textareaRef.current;
+    const textarea = textareaRef.current;
 
     if (!textarea) {
       return;
@@ -713,11 +529,10 @@ function App() {
 
     const maxHeight = 180;
 
-    textarea.style.height =
-      `${Math.min(
-        textarea.scrollHeight,
-        maxHeight
-      )}px`;
+    textarea.style.height = `${Math.min(
+      textarea.scrollHeight,
+      maxHeight
+    )}px`;
   }
 
   // ============================================================
@@ -737,8 +552,7 @@ function App() {
   // ============================================================
 
   function resetTextarea() {
-    const textarea =
-      textareaRef.current;
+    const textarea = textareaRef.current;
 
     if (!textarea) {
       return;
@@ -760,9 +574,7 @@ function App() {
         content
       );
 
-      setCopiedMessageId(
-        messageId
-      );
+      setCopiedMessageId(messageId);
 
       setTimeout(() => {
         setCopiedMessageId(null);
@@ -799,23 +611,6 @@ function App() {
     }
 
     // ========================================================
-    // SAVE CURRENT CONVERSATION ID
-    // ========================================================
-
-    const activeConversationId =
-      conversationId;
-
-    // ========================================================
-    // CHECK WHETHER THIS IS FIRST USER MESSAGE
-    // ========================================================
-
-    const hasPreviousUserMessage =
-      messages.some(
-        (message) =>
-          message.role === "user"
-      );
-
-    // ========================================================
     // USER MESSAGE
     // ========================================================
 
@@ -825,12 +620,10 @@ function App() {
       content: text,
     };
 
-    setMessages(
-      (previous) => [
-        ...previous,
-        userMessage,
-      ]
-    );
+    setMessages((previous) => [
+      ...previous,
+      userMessage,
+    ]);
 
     setInput("");
 
@@ -845,16 +638,14 @@ function App() {
     const assistantId =
       `assistant-${Date.now()}`;
 
-    setMessages(
-      (previous) => [
-        ...previous,
-        {
-          id: assistantId,
-          role: "assistant",
-          content: "",
-        },
-      ]
-    );
+    setMessages((previous) => [
+      ...previous,
+      {
+        id: assistantId,
+        role: "assistant",
+        content: "",
+      },
+    ]);
 
     try {
       // ======================================================
@@ -862,18 +653,13 @@ function App() {
       // ======================================================
 
       const response = await fetch(
-        `${API_BASE_URL}/conversations/${activeConversationId}/messages/stream`,
+        `${API_BASE_URL}/conversations/${conversationId}/messages/stream`,
         {
           method: "POST",
-
           headers: {
-            "Content-Type":
-              "application/json",
-
-            Accept:
-              "text/event-stream",
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
           },
-
           body: JSON.stringify({
             content: text,
           }),
@@ -881,8 +667,7 @@ function App() {
       );
 
       if (!response.ok) {
-        const errorText =
-          await response.text();
+        const errorText = await response.text();
 
         throw new Error(
           errorText ||
@@ -905,7 +690,7 @@ function App() {
       let buffer = "";
 
       // ======================================================
-      // PROCESS STREAM
+      // READ STREAM
       // ======================================================
 
       while (true) {
@@ -975,9 +760,9 @@ function App() {
               continue;
             }
 
-            // ==============================================
+            // ----------------------------------------------
             // TEXT CHUNK
-            // ==============================================
+            // ----------------------------------------------
 
             if (
               data.type ===
@@ -1008,9 +793,9 @@ function App() {
               );
             }
 
-            // ==============================================
+            // ----------------------------------------------
             // STREAM COMPLETE
-            // ==============================================
+            // ----------------------------------------------
 
             else if (
               data.type ===
@@ -1027,12 +812,10 @@ function App() {
                         assistantId
                           ? {
                               ...message,
-
                               id:
                                 data.message
                                   .id ||
                                 assistantId,
-
                               content:
                                 data.message
                                   .content ||
@@ -1048,9 +831,9 @@ function App() {
               );
             }
 
-            // ==============================================
+            // ----------------------------------------------
             // BACKEND ERROR
-            // ==============================================
+            // ----------------------------------------------
 
             else if (
               data.type ===
@@ -1132,12 +915,10 @@ function App() {
                       assistantId
                         ? {
                             ...message,
-
                             id:
                               data.message
                                 .id ||
                               assistantId,
-
                             content:
                               data.message
                                 .content ||
@@ -1155,27 +936,6 @@ function App() {
           }
         }
       }
-
-      // ======================================================
-      // AUTOMATICALLY NAME NEW CONVERSATION
-      // ======================================================
-
-      if (!hasPreviousUserMessage) {
-        await updateConversationTitle(
-          activeConversationId,
-          text
-        );
-      }
-
-      // ======================================================
-      // REFRESH CONVERSATION HISTORY
-      // ======================================================
-
-      await loadConversations();
-
-      console.log(
-        "Conversation history refreshed after message."
-      );
     } catch (error) {
       console.error(
         "NEXA AI streaming error:",
@@ -1312,7 +1072,6 @@ function App() {
         {/* CONVERSATION TITLE */}
 
         <div className="conversation-heading">
-
           <span>
             Conversations
           </span>
@@ -1320,7 +1079,6 @@ function App() {
           <span className="conversation-count">
             {conversations.length}
           </span>
-
         </div>
 
         {/* CONVERSATIONS */}
@@ -1348,20 +1106,13 @@ function App() {
                   conversation.id ? (
                     <input
                       className="conversation-edit-input"
-                      value={
-                        editingTitle
-                      }
-                      onChange={(
-                        event
-                      ) =>
+                      value={editingTitle}
+                      onChange={(event) =>
                         setEditingTitle(
-                          event.target
-                            .value
+                          event.target.value
                         )
                       }
-                      onKeyDown={(
-                        event
-                      ) => {
+                      onKeyDown={(event) => {
                         if (
                           event.key ===
                           "Enter"
@@ -1377,10 +1128,6 @@ function App() {
                         ) {
                           setEditingConversationId(
                             null
-                          );
-
-                          setEditingTitle(
-                            ""
                           );
                         }
                       }}
@@ -1408,10 +1155,7 @@ function App() {
                         </span>
 
                         <span className="conversation-title">
-                          {
-                            conversation.title ||
-                            "New Conversation"
-                          }
+                          {conversation.title}
                         </span>
 
                       </button>
@@ -1642,9 +1386,7 @@ function App() {
                                     ),
                                 }}
                               >
-                                {
-                                  message.content
-                                }
+                                {message.content}
                               </ReactMarkdown>
 
                             </div>
@@ -1659,9 +1401,7 @@ function App() {
                           )
                         ) : (
                           <div className="user-text">
-                            {
-                              message.content
-                            }
+                            {message.content}
                           </div>
                         )}
 
@@ -1713,9 +1453,7 @@ function App() {
               }
             )}
 
-            <div
-              ref={messagesEndRef}
-            />
+            <div ref={messagesEndRef} />
 
           </div>
 
@@ -1732,12 +1470,8 @@ function App() {
             <textarea
               ref={textareaRef}
               value={input}
-              onChange={
-                handleInputChange
-              }
-              onKeyDown={
-                handleKeyDown
-              }
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
               placeholder={
                 conversationId
                   ? "Ask NEXA AI anything..."
