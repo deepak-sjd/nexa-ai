@@ -171,11 +171,11 @@ class VectorStore:
 
     def search(
         self,
-        query: str,
+        embedding: list[float],
         top_k: int = 5,
     ) -> list[dict[str, Any]]:
         """
-        Search the vector store using semantic similarity.
+        Search FAISS using a pre-compute query embedding.
         """
 
         if self.index is None:
@@ -184,15 +184,15 @@ class VectorStore:
         if self.index.ntotal == 0:
             return []
 
-        query_embedding = (
-            embedding_service.embed_query(query)
-        )
+        if not embedding:
+            return []
 
         query_vector = np.asarray(
-            [query_embedding],
+            [embedding],
             dtype="float32",
         )
 
+   # Normalize for cosine similarity
         faiss.normalize_L2(query_vector)
 
         scores, indices = self.index.search(
@@ -215,9 +215,16 @@ class VectorStore:
 
             metadata = self.metadata[index_id].copy()
 
-            metadata["score"] = float(score)
-
-            results.append(metadata)
+            results.append(
+                {
+                    "content": metadata.get(
+                        "content",
+                        "",
+                    ),
+                    "score": float(score),
+                    "metadata": metadata,
+                }
+            )
 
         return results
 

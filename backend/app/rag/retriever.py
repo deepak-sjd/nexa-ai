@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from backend.app.rag.embeddings import embedding_service
+from app.rag.embeddings import embedding_service
 
 
 
@@ -354,8 +354,9 @@ class Retriever:
 # ============================================================
 # SHARED RETRIEVER INSTANCE
 # ============================================================
-
+from app.rag.vector_store import vector_store
 retriever = Retriever(
+    vector_store=vector_store,
     top_k=8,
     similarity_threshold=0.35,
 )
