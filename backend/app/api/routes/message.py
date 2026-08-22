@@ -8,6 +8,7 @@ from app.models.conversation import Conversation
 from app.models.message import Message
 from app.schemas.message import MessageCreate, MessageResponse
 from app.services.llm_service import llm_service
+from app.services.rag_service import rag_service
 
 router = APIRouter(
     prefix="/conversations",
@@ -85,6 +86,14 @@ def create_message(
         for message in previous_messages
     ]
 
+    rag_result = rag_service.search(
+        query= data.content,
+        retrieval_top_k=8,
+        rerank_top_k=5,
+    )
+
+    retrieved_context = rag_result["context"]
+
     # 3. Save user's message
     user_message = Message(
         conversation_id=conversation_id,
@@ -101,6 +110,7 @@ def create_message(
        ai_response = llm_service.generate_response(
           user_message=data.content,
           conversation_history=conversation_history,
+          retrieved_context= retrieved_context,
     )
 
     except Exception as e:

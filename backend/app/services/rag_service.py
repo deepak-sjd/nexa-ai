@@ -87,7 +87,6 @@ class RAGService:
         return self.reranker.rerank(
             query=query,
             results=results,
-            top_k=top_k,
         )
 
     # ============================================================
@@ -106,9 +105,11 @@ class RAGService:
         if not results:
             return ""
 
-        return self.context_builder.build(
+        built_context= self.context_builder.build(
             results
         )
+
+        return built_context.context
 
     # ============================================================
     # COMPLETE RAG PIPELINE
