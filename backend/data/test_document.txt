@@ -1,0 +1,7 @@
+NEXA AI EmbeddingService
+
+The EmbeddingService converts text into numerical embedding vectors.
+
+These vectors are used by the RAG system to perform semantic search and find relevant document chunks.
+
+The embedding model used by NEXA AI is gemini-embedding-001.

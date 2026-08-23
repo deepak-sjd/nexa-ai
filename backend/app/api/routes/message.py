@@ -10,6 +10,7 @@ from app.schemas.message import MessageCreate, MessageResponse
 from app.services.llm_service import llm_service
 from app.services.rag_service import rag_service
 
+
 router = APIRouter(
     prefix="/conversations",
     tags=["Messages"],
@@ -87,7 +88,7 @@ def create_message(
     ]
 
     rag_result = rag_service.search(
-        query= data.content,
+        query=data.content,
         retrieval_top_k=8,
         rerank_top_k=5,
     )
@@ -181,15 +182,25 @@ def create_message_stream(
     previous_messages.reverse()
 
     conversation_history = [
-        {
-            "role": message.role,
-            "content": message.content,
-        }
-        for message in previous_messages
-    ]
+    {
+        "role": message.role,
+        "content": message.content,
+    }
+    for message in previous_messages
+]
+
 
     # ========================================================
-    # 3. SAVE USER MESSAGE
+    # 3. RAG RETRIEVAL
+    # ========================================================
+    rag_result = rag_service.search(
+       query=data.content,
+       retrieval_top_k=8,
+       rerank_top_k=5,
+)
+    retrieved_context = rag_result["context"]
+    # ========================================================
+    # 4. SAVE USER MESSAGE
     # ========================================================
 
     user_message = Message(
@@ -203,7 +214,7 @@ def create_message_stream(
     db.refresh(user_message)
 
     # ========================================================
-    # 4. STREAM GEMINI RESPONSE
+    # 5. STREAM GEMINI RESPONSE
     # ========================================================
 
     def generate():
@@ -215,6 +226,7 @@ def create_message_stream(
             for chunk in llm_service.generate_response_stream(
                 user_message=data.content,
                 conversation_history=conversation_history,
+                retrieved_context=retrieved_context,
             ):
 
                 full_response += chunk
@@ -226,7 +238,7 @@ def create_message_stream(
                 )
 
             # =================================================
-            # 5. SAVE COMPLETE AI RESPONSE
+            # 6. SAVE COMPLETE AI RESPONSE
             # =================================================
 
             assistant_message = Message(
@@ -262,16 +274,18 @@ def create_message_stream(
         except Exception as e:
 
             db.rollback()
+            print("=" * 70)
+            print("STREAMING ERROR")
+            print(type(e).__name__)
+            print(str(e))
+            print("=" *70)
 
             yield (
                 "data: "
                 + json.dumps(
                     {
                         "type": "error",
-                        "message": (
-                            "AI service temporarily "
-                            "unavailable."
-                        ),
+                        "message": str(e),
                     }
                 )
                 + "\n\n"
