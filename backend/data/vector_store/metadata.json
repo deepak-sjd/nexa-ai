@@ -1,15 +1,8 @@
 [
   {
     "vector_id": 0,
-    "document_id": "test-document-001",
-    "source": "data/test_document.txt",
-    "chunk_index": 0,
-    "content": "NEXA AI EmbeddingService\nThe EmbeddingService converts text into numerical embedding vectors.\nThese vectors are used by the RAG system to perform semantic search and find relevant document chunks.\nThe embedding model used by NEXA AI is gemini-embedding-001."
-  },
-  {
-    "vector_id": 1,
-    "document_id": "test-document-001",
-    "source": "data/test_document.txt",
+    "document_id": "test_document",
+    "source": "data\\knowledge_base\\test_document.txt",
     "chunk_index": 0,
     "content": "NEXA AI EmbeddingService\nThe EmbeddingService converts text into numerical embedding vectors.\nThese vectors are used by the RAG system to perform semantic search and find relevant document chunks.\nThe embedding model used by NEXA AI is gemini-embedding-001."
   }
