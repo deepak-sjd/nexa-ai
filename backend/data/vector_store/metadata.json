@@ -1,9 +1,65 @@
 [
   {
     "vector_id": 0,
+    "document_id": "embedding_service",
+    "source": "data\\knowledge_base\\embedding_service.md",
+    "chunk_index": 0,
+    "content": "# EmbeddingService\nEmbeddingService converts text into numerical embedding vectors.\nNEXA AI uses the Gemini `gemini-embedding-001` model for embeddings.\n## Responsibilities\n- Convert document chunks into embedding vectors.\n- Convert user queries into embedding vectors.\n- Provide embeddings to the VectorStore.\n- Enable semantic similarity search.\n## Main Methods\n### embed_text()\nConverts one text string into an embedding vector.\n### embed_documents()\nConverts multiple document chunks into embedding vectors.\n### embed_query()\nConverts the user's question into an embedding vector.\n## RAG Relationship\nThe EmbeddingService is used by both document indexing and query retrieval.\nDocument flow:\nDocument\n→ DocumentProcessor\n→ Text Chunks\n→ EmbeddingService\n→ Embedding Vectors\n→ VectorStore\nQuery flow:\nUser Query\n→ EmbeddingService\n→ Query Embedding\n→ VectorStore Search\n→ Relevant Chunks"
+  },
+  {
+    "vector_id": 1,
+    "document_id": "rag_service",
+    "source": "data\\knowledge_base\\rag_service.md",
+    "chunk_index": 0,
+    "content": "# RAGService\nRAGService is the main orchestration service for the NEXA AI retrieval pipeline.\nIt connects the Retriever, Reranker, and Context Builder.\nRAGService does not call the LLM.\n## Pipeline\nUser Query\n→ Retriever\n→ Reranker\n→ Context Builder\n→ Final RAG Context\n→ LLM\n## Responsibilities\n- Retrieve relevant knowledge.\n- Rerank retrieved knowledge.\n- Build LLM-ready context.\n- Provide a single interface for the complete RAG pipeline.\n## Retrieve\nThe `retrieve()` method calls the Retriever.\nThe default retrieval size is 8 results.\n## Rerank\nThe `rerank()` method sends retrieved results to the Reranker.\nThe default final reranking size is 5 results.\n## Build Context\nThe `build_context()` method sends reranked results to the Context Builder.\nThe Context Builder converts the selected results into text that can be provided to the LLM.\n## Search\nThe `search()` method executes the complete pipeline:\n1. Receive the user query.\n2. Retrieve semantic candidates.\n3. Rerank the candidates.\n4."
+  },
+  {
+    "vector_id": 2,
+    "document_id": "rag_service",
+    "source": "data\\knowledge_base\\rag_service.md",
+    "chunk_index": 1,
+    "content": "Search\nThe `search()` method executes the complete pipeline:\n1. Receive the user query.\n2. Retrieve semantic candidates.\n3. Rerank the candidates.\n4. Build the final context.\n5. Return the query, retrieved results, reranked results, and final context.\n## Important Design\nRAGService separates knowledge retrieval from language generation.\nThe RAG system finds the relevant project knowledge.\nThe LLM uses that knowledge to generate the final answer.\n## Complete Relationship\nDocumentProcessor\n→ EmbeddingService\n→ VectorStore\n→ Retriever\n→ Reranker\n→ Context Builder\n→ RAGService\n→ LLM"
+  },
+  {
+    "vector_id": 3,
+    "document_id": "reranker",
+    "source": "data\\knowledge_base\\reranker.md",
+    "chunk_index": 0,
+    "content": "# Reranker\nReranker is the second-stage relevance component in the NEXA AI RAG pipeline.\nIt receives candidate chunks from the Retriever and selects the strongest results.\n## Responsibilities\n- Receive retrieved chunks.\n- Remove weak candidates.\n- Calculate a reranking score.\n- Sort results by relevance.\n- Return the top results.\n## Current Implementation\nThe current Reranker uses the original semantic retrieval score as its reranking score.\nIt does not yet use a separate cross-encoder model.\nThis design keeps the Reranker interface separate so a real cross-encoder or reranking model can be added later.\n## Relevance Filtering\nThe default minimum score is `0.35`.\nResults below this score are ignored.\n## Output\nEach reranked result contains:\n- content\n- score\n- original_score\n- metadata\n## RAG Relationship\nRetriever finds candidate knowledge.\nReranker selects the strongest candidates.\nFlow:\nUser Query\n→ Retriever\n→ Candidate Chunks\n→ Reranker\n→ Best Chunks\n→ Context Builder"
+  },
+  {
+    "vector_id": 4,
+    "document_id": "retriever",
+    "source": "data\\knowledge_base\\retriever.md",
+    "chunk_index": 0,
+    "content": "# Retriever\nRetriever is the semantic retrieval component of the NEXA AI RAG pipeline.\nIts job is to find the most relevant document chunks for a user's query.\n## Responsibilities\n- Convert the user query into an embedding.\n- Search the VectorStore.\n- Normalize retrieval results.\n- Filter low-relevance results.\n- Remove duplicate chunks.\n- Sort results by similarity score.\n- Return the final top-K results.\n## Retrieval Process\nUser Query\n→ Query Embedding\n→ VectorStore Search\n→ Candidate Results\n→ Relevance Filtering\n→ Duplicate Removal\n→ Sorting\n→ Top-K Results\n## Query Embedding\nRetriever uses EmbeddingService to convert the user's question into an embedding vector.\n## Vector Search\nRetriever sends the query embedding to VectorStore.\nThe VectorStore returns chunks containing:\n- content\n- similarity score\n- metadata\n## Relevance Filtering\nRetriever uses a similarity threshold.\nThe default threshold is `0.35`.\nResults below this threshold are removed.\n## Candidate Retrieval\nRetriever r"
+  },
+  {
+    "vector_id": 5,
+    "document_id": "retriever",
+    "source": "data\\knowledge_base\\retriever.md",
+    "chunk_index": 1,
+    "content": "g\nRetriever uses a similarity threshold.\nThe default threshold is `0.35`.\nResults below this threshold are removed.\n## Candidate Retrieval\nRetriever retrieves more candidates than the final requested number.\nFor example, when `top_k` is 8, it can retrieve up to 24 candidates before filtering and deduplication.\nThis gives the pipeline more candidates to work with.\n## Final Result\nThe strongest remaining chunks are sorted by similarity score and returned to the RAG pipeline."
+  },
+  {
+    "vector_id": 6,
     "document_id": "test_document",
     "source": "data\\knowledge_base\\test_document.txt",
     "chunk_index": 0,
     "content": "NEXA AI EmbeddingService\nThe EmbeddingService converts text into numerical embedding vectors.\nThese vectors are used by the RAG system to perform semantic search and find relevant document chunks.\nThe embedding model used by NEXA AI is gemini-embedding-001."
+  },
+  {
+    "vector_id": 7,
+    "document_id": "vector_store",
+    "source": "data\\knowledge_base\\vector_store.md",
+    "chunk_index": 0,
+    "content": "# VectorStore\nVectorStore is the persistent FAISS-based vector store used by NEXA AI.\nIt stores document embeddings and metadata and performs semantic similarity search.\n## Responsibilities\n- Store document embeddings.\n- Store document chunk metadata.\n- Persist the FAISS index to disk.\n- Search for semantically similar chunks.\n- Return relevant chunks with similarity scores.\n## Technology\nNEXA AI uses:\n- FAISS for vector similarity search.\n- NumPy for vector representation.\n- JSON for metadata persistence.\nThe FAISS index uses `IndexFlatIP`.\nVectors are normalized before searching so inner product behaves like cosine similarity.\n## Metadata\nEach indexed chunk stores:\n- vector_id\n- document_id\n- source\n- chunk_index\n- content\n## Main Operations\n### add_chunks()\nReceives document chunks, creates embeddings through EmbeddingService, and adds them to FAISS.\n### search()\nReceives a query embedding and returns the most similar document chunks.\n### count()\nReturns the number of indexed chunks"
+  },
+  {
+    "vector_id": 8,
+    "document_id": "vector_store",
+    "source": "data\\knowledge_base\\vector_store.md",
+    "chunk_index": 1,
+    "content": "them to FAISS.\n### search()\nReceives a query embedding and returns the most similar document chunks.\n### count()\nReturns the number of indexed chunks.\n### clear()\nRemoves the current FAISS index and metadata.\n## Relationship With EmbeddingService\nEmbeddingService creates the vectors.\nVectorStore stores and searches those vectors.\nFlow:\nDocument\n→ DocumentProcessor\n→ EmbeddingService\n→ VectorStore\n→ FAISS\nQuery:\nUser Query\n→ EmbeddingService\n→ VectorStore\n→ Similarity Search\n→ Relevant Chunks"
   }
 ]
