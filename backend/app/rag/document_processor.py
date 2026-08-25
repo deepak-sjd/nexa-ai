@@ -1,48 +1,58 @@
+
 from pathlib import Path
-from typing import List
+import re
+from typing import Any
 
 
 class DocumentProcessor:
     """
-    Loads documents and splits their text into smaller chunks.
+    Converts knowledge-base documents into meaningful chunks.
 
-    These chunks will later be converted into embeddings
-    and stored in the vector database.
+    Chunking strategy:
+        Markdown:
+            Split by headings and keep sections together.
+
+        Python:
+            Split primarily around classes/functions/methods.
+
+        Text:
+            Split by paragraphs.
+
+    Large sections are split only when necessary.
     """
 
     SUPPORTED_EXTENSIONS = {
         ".txt",
         ".md",
         ".py",
-        ".js",
-        ".jsx",
-        ".ts",
-        ".tsx",
-        ".json",
-        ".csv",
     }
 
     def __init__(
         self,
-        chunk_size: int = 1000,
-        chunk_overlap: int = 150,
+        max_chunk_characters: int = 6000,
+        overlap_characters: int = 500,
     ):
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
+        self.max_chunk_characters = max(
+            1000,
+            max_chunk_characters,
+        )
 
-        if chunk_overlap >= chunk_size:
-            raise ValueError(
-                "chunk_overlap must be smaller than chunk_size"
-            )
+        self.overlap_characters = max(
+            0,
+            min(
+                overlap_characters,
+                self.max_chunk_characters // 2,
+            ),
+        )
 
     # ============================================================
-    # LOAD DOCUMENT
+    # PUBLIC API
     # ============================================================
 
-    def load_document(self, file_path: str) -> str:
-        """
-        Read a supported text-based document.
-        """
+    def process(
+        self,
+        file_path: str,
+    ) -> list[dict[str, Any]]:
 
         path = Path(file_path)
 
@@ -52,104 +62,296 @@ class DocumentProcessor:
             )
 
         if path.suffix.lower() not in self.SUPPORTED_EXTENSIONS:
-            raise ValueError(
-                f"Unsupported document type: {path.suffix}"
-            )
+            return []
 
-        return path.read_text(
+        text = path.read_text(
             encoding="utf-8",
             errors="ignore",
-        )
-
-    # ============================================================
-    # CLEAN TEXT
-    # ============================================================
-
-    def clean_text(self, text: str) -> str:
-        """
-        Basic text cleanup.
-        """
-
-        lines = [
-            line.strip()
-            for line in text.splitlines()
-        ]
-
-        cleaned_lines = [
-            line
-            for line in lines
-            if line
-        ]
-
-        return "\n".join(cleaned_lines)
-
-    # ============================================================
-    # SPLIT TEXT
-    # ============================================================
-
-    def split_text(self, text: str) -> List[str]:
-        """
-        Split text into overlapping chunks.
-
-        Example:
-
-        chunk 1: 0    -> 1000
-        chunk 2: 850  -> 1850
-        chunk 3: 1700 -> 2700
-
-        The overlap helps preserve context between chunks.
-        """
-
-        text = text.strip()
+        ).strip()
 
         if not text:
             return []
 
+        extension = path.suffix.lower()
+
+        if extension == ".md":
+            sections = self._split_markdown(text)
+
+        elif extension == ".py":
+            sections = self._split_python(text)
+
+        else:
+            sections = self._split_text(text)
+
         chunks = []
 
-        start = 0
-        text_length = len(text)
+        for section in sections:
 
-        while start < text_length:
+            section = section.strip()
 
-            end = min(
-                start + self.chunk_size,
-                text_length,
+            if not section:
+                continue
+
+            if len(section) <= self.max_chunk_characters:
+                chunks.append(section)
+            else:
+                chunks.extend(
+                    self._split_large_section(section)
+                )
+
+        return chunks
+
+    # ============================================================
+    # MARKDOWN CHUNKING
+    # ============================================================
+
+    def _split_markdown(
+        self,
+        text: str,
+    ) -> list[str]:
+
+        lines = text.splitlines()
+
+        sections = []
+        current = []
+
+        for line in lines:
+
+            # Markdown heading
+            if re.match(
+                r"^\s{0,3}#{1,6}\s+",
+                line,
+            ):
+
+                if current:
+                    sections.append(
+                        "\n".join(current).strip()
+                    )
+                    current = []
+
+            current.append(line)
+
+        if current:
+            sections.append(
+                "\n".join(current).strip()
             )
 
-            chunk = text[start:end].strip()
+        return [
+            section
+            for section in sections
+            if section.strip()
+        ]
+
+    # ============================================================
+    # PYTHON CHUNKING
+    # ============================================================
+
+    def _split_python(
+        self,
+        text: str,
+    ) -> list[str]:
+
+        lines = text.splitlines()
+
+        sections = []
+        current = []
+
+        for index, line in enumerate(lines):
+
+            stripped = line.lstrip()
+
+            is_top_level_definition = (
+                (
+                    stripped.startswith("class ")
+                    or stripped.startswith("def ")
+                    or stripped.startswith("async def ")
+                )
+                and len(line) - len(stripped) == 0
+            )
+
+            if is_top_level_definition and current:
+
+                sections.append(
+                    "\n".join(current).strip()
+                )
+
+                current = []
+
+            current.append(line)
+
+        if current:
+            sections.append(
+                "\n".join(current).strip()
+            )
+
+        return [
+            section
+            for section in sections
+            if section.strip()
+        ]
+
+    # ============================================================
+    # PLAIN TEXT CHUNKING
+    # ============================================================
+
+    def _split_text(
+        self,
+        text: str,
+    ) -> list[str]:
+
+        paragraphs = re.split(
+            r"\n\s*\n",
+            text,
+        )
+
+        return [
+            paragraph.strip()
+            for paragraph in paragraphs
+            if paragraph.strip()
+        ]
+
+    # ============================================================
+    # LARGE SECTION SPLITTING
+    # ============================================================
+
+    def _split_large_section(
+        self,
+        text: str,
+    ) -> list[str]:
+
+        chunks = []
+
+        # First try paragraph boundaries.
+        paragraphs = re.split(
+            r"\n\s*\n",
+            text,
+        )
+
+        current = ""
+
+        for paragraph in paragraphs:
+
+            paragraph = paragraph.strip()
+
+            if not paragraph:
+                continue
+
+            candidate = (
+                f"{current}\n\n{paragraph}"
+                if current
+                else paragraph
+            )
+
+            if (
+                len(candidate)
+                <= self.max_chunk_characters
+            ):
+                current = candidate
+                continue
+
+            if current:
+                chunks.append(current)
+
+            # A single paragraph is still too large.
+            if len(paragraph) > self.max_chunk_characters:
+
+                sub_chunks = self._split_by_lines(
+                    paragraph
+                )
+
+                chunks.extend(sub_chunks)
+
+                current = ""
+
+            else:
+                current = paragraph
+
+        if current:
+            chunks.append(current)
+
+        return chunks
+
+    # ============================================================
+    # LINE-BASED FALLBACK
+    # ============================================================
+
+    def _split_by_lines(
+        self,
+        text: str,
+    ) -> list[str]:
+
+        lines = text.splitlines()
+
+        chunks = []
+        current_lines = []
+        current_length = 0
+
+        for line in lines:
+
+            line_length = len(line) + 1
+
+            if (
+                current_lines
+                and current_length + line_length
+                > self.max_chunk_characters
+            ):
+
+                chunk = "\n".join(
+                    current_lines
+                ).strip()
+
+                if chunk:
+                    chunks.append(chunk)
+
+                # Small overlap from previous lines.
+                overlap_lines = []
+
+                overlap_length = 0
+
+                for previous_line in reversed(
+                    current_lines
+                ):
+
+                    if (
+                        overlap_length
+                        + len(previous_line)
+                        + 1
+                        > self.overlap_characters
+                    ):
+                        break
+
+                    overlap_lines.insert(
+                        0,
+                        previous_line,
+                    )
+
+                    overlap_length += (
+                        len(previous_line) + 1
+                    )
+
+                current_lines = overlap_lines
+                current_length = overlap_length
+
+            current_lines.append(line)
+            current_length += line_length
+
+        if current_lines:
+
+            chunk = "\n".join(
+                current_lines
+            ).strip()
 
             if chunk:
                 chunks.append(chunk)
 
-            if end >= text_length:
-                break
-
-            start = end - self.chunk_overlap
-
-        return chunks
-
-    # ============================================================
-    # PROCESS DOCUMENT
-    # ============================================================
-
-    def process(self, file_path: str) -> List[str]:
-        """
-        Complete document-processing pipeline.
-        """
-
-        raw_text = self.load_document(file_path)
-
-        cleaned_text = self.clean_text(
-            raw_text
-        )
-
-        chunks = self.split_text(
-            cleaned_text
-        )
-
         return chunks
 
 
-# Shared service instance
-document_processor = DocumentProcessor()
+# ============================================================
+# SHARED INSTANCE
+# ============================================================
+
+document_processor = DocumentProcessor(
+    max_chunk_characters=6000,
+    overlap_characters=500,
+)
