@@ -60,7 +60,7 @@
     "document_id": "app_api_routes_message.py",
     "source": "app\\api\\routes\\message.py",
     "chunk_index": 2,
-    "content": "def create_message(\n    conversation_id: int,\n    data: MessageCreate,\n    db: Session = Depends(get_db),\n):\n    # 1. Check conversation exists\n    conversation = (\n        db.query(Conversation)\n        .filter(Conversation.id == conversation_id)\n        .first()\n    )\n\n    if conversation is None:\n        raise HTTPException(\n            status_code=404,\n            detail=\"Conversation not found\",\n        )\n\n    # 2. Load previous conversation history\n    previous_messages = (\n        db.query(Message)\n        .filter(Message.conversation_id == conversation_id)\n        .order_by(Message.created_at.asc())\n        .all()\n    )\n\n    conversation_history = [\n        {\n            \"role\": message.role,\n            \"content\": message.content,\n        }\n        for message in previous_messages\n    ]\n\n    rag_result = rag_service.search(\n        query=data.content,\n        retrieval_top_k=8,\n        rerank_top_k=5,\n    )\n\n    retrieved_context = rag_result[\"context\"]\n\n    # 3. Save user's message\n    user_message = Message(\n        conversation_id=conversation_id,\n        role=\"user\",\n        content=data.content,\n    )\n\n    db.add(user_message)\n    db.commit()\n    db.refresh(user_message)\n\n    try:\n    # 4. Send current message + previous history to Gemini\n       ai_response = llm_service.generate_response(\n          user_message=data.content,\n          conversation_history=conversation_history,\n          retrieved_context= retrieved_context,\n    )\n\n    except Exception as e:\n        print(f\"AI service error: {e}\")\n\n        raise HTTPException(\n           status_code=503,\n           detail=\"AI service is temporarily unavailable. Please try again.\",\n    )\n\n    # 5. Save assistant response\n    assistant_message = Message(\n        conversation_id=conversation_id,\n        role=\"assistant\",\n        content=ai_response,\n    )\n\n    db.add(assistant_message)\n    db.commit()\n    db.refresh(assistant_message)\n\n    # 6. Return both messages\n    return [\n        user_message,\n        assistant_message,\n    ]\n\n@router.post(\n    \"/{conversation_id}/messages/stream\",\n)"
+    "content": "def create_message(\n    conversation_id: int,\n    data: MessageCreate,\n    db: Session = Depends(get_db),\n):\n    # 1. Check conversation exists\n    conversation = (\n        db.query(Conversation)\n        .filter(Conversation.id == conversation_id)\n        .first()\n    )\n\n    if conversation is None:\n        raise HTTPException(\n            status_code=404,\n            detail=\"Conversation not found\",\n        )\n\n    # 2. Load previous conversation history\n    previous_messages = (\n        db.query(Message)\n        .filter(Message.conversation_id == conversation_id)\n        .order_by(Message.created_at.asc())\n        .all()\n    )\n\n    conversation_history = [\n        {\n            \"role\": message.role,\n            \"content\": message.content,\n        }\n        for message in previous_messages\n    ]\n\n    rag_result = rag_service.search(\n        query=data.content,\n        retrieval_top_k=8,\n        rerank_top_k=5,\n    )\n\n    retrieved_context = rag_result[\"context\"]\n\n    # 3. Save user's message\n    user_message = Message(\n        conversation_id=conversation_id,\n        role=\"user\",\n        content=data.content,\n    )\n\n    db.add(user_message)\n    db.commit()\n    db.refresh(user_message)\n\n    try:\n    # 4. Send current message + previous history to Gemini\n       ai_response = llm_service.generate_response(\n          user_message=data.content,\n          conversation_history=conversation_history,\n          retrieved_context= retrieved_context,\n    )\n\n    except Exception as e:\n        print(f\"AI service error: {e}\")\n\n        raise HTTPException(\n           status_code=503,\n           detail=\"AI service is temporarily unavailable. Please try again.\",\n    )\n\n    # 5. Save assistant response\n    assistant_message = Message(\n        conversation_id=conversation_id,\n        role=\"assistant\",\n        content=ai_response,\n    )\n\n    db.add(assistant_message)\n    db.commit()\n    db.refresh(assistant_message)\n\n    # 6. Return both messages\n    return [assistant_message]\n\n@router.post(\n    \"/{conversation_id}/messages/stream\",\n)"
   },
   {
     "vector_id": 9,
@@ -256,147 +256,147 @@
     "document_id": "app_rag_reranker.py",
     "source": "app\\rag\\reranker.py",
     "chunk_index": 0,
-    "content": "from dataclasses import dataclass\nfrom typing import Any\n\nfrom app.rag.retriever import RetrievalResult\n\n\n@dataclass"
+    "content": "\"\"\"\n==============================================================\nNEXA AI\nProduction-Oriented RAG Reranker\n==============================================================\n\nPurpose\n-------\nSecond-stage relevance scoring for retrieved RAG chunks.\n\nPipeline:\n\n    User Query\n        ↓\n    Retriever\n        ↓\n    Candidate Chunks\n        ↓\n    Reranker\n        ↓\n    Ranked Chunks\n        ↓\n    Context Builder\n        ↓\n    LLM\n\nCurrent implementation\n----------------------\nThis version provides a production-oriented baseline reranker.\n\nIt combines:\n\n1. Semantic retrieval score\n2. Query/chunk lexical relevance\n3. Exact query-term coverage\n4. Duplicate filtering\n5. Minimum relevance filtering\n6. Deterministic ranking\n\nThe class is intentionally isolated so the scoring strategy\ncan later be replaced with a real cross-encoder or reranking\nmodel without changing the rest of the RAG pipeline.\n\nImportant\n---------\nThis is NOT a neural cross-encoder yet.\n\nIt is a strong, lightweight baseline designed to work with\nthe existing FAISS + Retriever architecture without adding\nanother model/API dependency.\n\n==============================================================\n\"\"\"\n\nfrom __future__ import annotations\n\nimport re\nfrom dataclasses import dataclass\nfrom typing import Any\n\nfrom app.rag.retriever import RetrievalResult\n\n\n# ==============================================================\n# DATA MODEL\n# ==============================================================\n\n\n@dataclass"
   },
   {
     "vector_id": 37,
     "document_id": "app_rag_reranker.py",
     "source": "app\\rag\\reranker.py",
     "chunk_index": 1,
-    "content": "class RerankedResult:\n    \"\"\"\n    Represents a document chunk after reranking.\n    \"\"\"\n\n    content: str\n    score: float\n    original_score: float\n    metadata: dict[str, Any]"
+    "content": "class RerankedResult:\n    \"\"\"\n    Represents a document chunk after second-stage reranking.\n\n    Attributes\n    ----------\n    content:\n        Retrieved document chunk text.\n\n    score:\n        Final reranking score.\n\n    original_score:\n        Original semantic similarity score returned by the\n        Retriever / VectorStore.\n\n    metadata:\n        Original chunk metadata.\n    \"\"\"\n\n    content: str\n    score: float\n    original_score: float\n    metadata: dict[str, Any]\n\n\n# ==============================================================\n# RERANKER\n# =============================================================="
   },
   {
     "vector_id": 38,
     "document_id": "app_rag_reranker.py",
     "source": "app\\rag\\reranker.py",
     "chunk_index": 2,
-    "content": "class Reranker:\n    \"\"\"\n    Reranks retrieved RAG chunks.\n\n    Current stage:\n        - Uses the initial retrieval score.\n        - Removes weak candidates.\n        - Applies a relevance weighting.\n        - Returns the strongest chunks first.\n\n    This interface is intentionally separated so we can\n    replace the scoring logic later with a real cross-encoder\n    or reranking model without changing the rest of the RAG pipeline.\n    \"\"\"\n\n    def __init__(\n        self,\n        top_k: int = 5,\n        min_score: float = 0.35,\n    ):\n        self.top_k = max(1, top_k)\n\n        self.min_score = max(\n            0.0,\n            min(min_score, 1.0),\n        )\n\n    # ============================================================\n    # RERANK\n    # ============================================================\n\n    def rerank(\n        self,\n        query: str,\n        results: list[RetrievalResult],\n    ) -> list[RerankedResult]:\n        \"\"\"\n        Rerank retrieved chunks.\n\n        Args:\n            query:\n                Original user question.\n\n            results:\n                Candidates returned by the retriever.\n        \"\"\"\n\n        if not query or not query.strip():\n            return []\n\n        if not results:\n            return []\n\n        reranked = []\n\n        for result in results:\n\n            if result.score < self.min_score:\n                continue\n\n            # Current baseline:\n            # preserve the semantic retrieval score.\n            rerank_score = result.score\n\n            reranked.append(\n                RerankedResult(\n                    content=result.content,\n                    score=rerank_score,\n                    original_score=result.score,\n                    metadata=result.metadata,\n                )\n            )\n\n        # Highest relevance first\n        reranked.sort(\n            key=lambda result: result.score,\n            reverse=True,\n        )\n\n        return reranked[: self.top_k]\n\n\n# ============================================================\n# SHARED RERANKER INSTANCE\n# ============================================================\n\nreranker = Reranker(\n    top_k=5,\n    min_score=0.35,\n)"
+    "content": "class Reranker:\n    \"\"\"\n    Production-oriented lightweight RAG reranker.\n\nThe reranker does not retrieve documents.\n\nIt receives candidates from the Retriever and calculates\n    a second relevance score.\n\nScoring strategy\n    ----------------\n\nfinal_score =\n            semantic_weight * semantic_score\n            +\n            lexical_weight * lexical_score\n\nWhere:\n\nsemantic_score\n            = original vector similarity score\n\nlexical_score\n            = query-term relevance inside the chunk\n\nThis gives the system two signals:\n\nSemantic similarity\n            \"Does this chunk mean something similar?\"\n\nLexical relevance\n            \"Does this chunk actually contain important\n             words from the user's question?\"\n\nThis is more useful than simply returning the original\n    retrieval score.\n\nLater this class can be replaced internally with:\n\nCrossEncoder\n        BGE Reranker\n        Cohere Rerank\n        Vertex AI reranking\n        Another neural reranking model\n\nwithout changing RAGService or ContextBuilder.\n    \"\"\"\n\n# Common English stop words.\n\nSTOP_WORDS = {\n        \"a\",\n        \"an\",\n        \"and\",\n        \"are\",\n        \"as\",\n        \"at\",\n        \"be\",\n        \"by\",\n        \"can\",\n        \"could\",\n        \"do\",\n        \"does\",\n        \"for\",\n        \"from\",\n        \"how\",\n        \"i\",\n        \"if\",\n        \"in\",\n        \"is\",\n        \"it\",\n        \"me\",\n        \"my\",\n        \"of\",\n        \"on\",\n        \"or\",\n        \"our\",\n        \"should\",\n        \"that\",\n        \"the\",\n        \"their\",\n        \"this\",\n        \"to\",\n        \"was\",\n        \"we\",\n        \"what\",\n        \"when\",\n        \"where\",\n        \"which\",\n        \"who\",\n        \"why\",\n        \"with\",\n        \"would\",\n        \"you\",\n        \"your\",\n    }\n\n# ----------------------------------------------------------\n    # INITIALIZATION\n    # ----------------------------------------------------------\n\ndef __init__(\n        self,\n        top_k: int = 5,\n        min_score: float = 0.35,\n        semantic_weight: float = 0.75,\n        lexical_weight: float = 0.25,\n        min_lexical_overlap: float = 0.0,\n    ):\n        \"\"\"\n        Initialize the reranker.\n\nParameters\n        ----------\n        top_k:\n            Maximum number of final chunks.\n\nmin_score:\n            Minimum original semantic retrieval score.\n\nsemantic_weight:\n            Weight assigned to semantic similarity.\n\nlexical_weight:\n            Weight assigned to lexical relevance.\n\nmin_lexical_overlap:\n            Optional minimum lexical overlap required.\n\nKeep this at 0.0 initially because semantic\n            retrieval should still be able to find relevant\n            chunks even when exact words are different.\n        \"\"\"\n\nself.top_k = max(1, int(top_k))\n\nself.min_score = self._clamp(\n            min_score,\n            0.0,\n            1.0,\n        )\n\nsemantic_weight = max(\n            0.0,\n            float(semantic_weight),\n        )\n\nlexical_weight = max(\n            0.0,\n            float(lexical_weight),\n        )\n\ntotal_weight = (\n            semantic_weight\n            + lexical_weight\n        )\n\nif total_weight <= 0:\n            raise ValueError(\n                \"semantic_weight + lexical_weight \"\n                \"must be greater than zero.\"\n            )\n\n# Normalize weights so their sum is exactly 1.\n\nself.semantic_weight = (\n            semantic_weight / total_weight\n        )\n\nself.lexical_weight = (\n            lexical_weight / total_weight\n        )\n\nself.min_lexical_overlap = self._clamp(\n            min_lexical_overlap,\n            0.0,\n            1.0,\n        )\n\n# ==========================================================\n    # PUBLIC API\n    # ==========================================================\n\ndef rerank(\n        self,\n        query: str,\n        results: list[RetrievalResult],\n        top_k: int | None = None,\n    ) -> list[RerankedResult]:\n        \"\"\"\n        Rerank retrieved candidates.\n\nParameters\n        ----------\n        query:\n            Original user query.\n\nresults:\n            Candidates returned by Retriever.\n\ntop_k:\n            Optional per-call override.\n\nReturns\n        -------\n        list[RerankedResult]\n            Strongest chunks first.\n        \"\"\"\n\n# ------------------------------------------------------\n        # Validate query\n        # ------------------------------------------------------\n\nif not query or not query.strip():\n            return []\n\n# ------------------------------------------------------\n        # Validate candidates\n        # ------------------------------------------------------\n\nif not results:\n            return []\n\nclean_query = query.strip()\n\n# ------------------------------------------------------\n        # Prepare query tokens once.\n        #\n        # Avoid repeating tokenization for every candidate.\n        # ------------------------------------------------------\n\nquery_tokens = self._tokenize(\n            clean_query\n        )\n\n# ------------------------------------------------------\n        # Remove duplicates before scoring.\n        # ------------------------------------------------------\n\nunique_results = self._remove_duplicates(\n            results\n        )\n\nreranked: list[RerankedResult] = []\n\n# ------------------------------------------------------\n        # Score every candidate.\n        # ------------------------------------------------------\n\nfor result in unique_results:\n\ncontent = self._clean_content(\n                result.content\n            )\n\nif not content:\n                continue\n\n# ----------------------------------------------\n            # Original semantic score\n            # ----------------------------------------------\n\noriginal_score = self._safe_score(\n                result.score\n            )\n\n# ----------------------------------------------\n            # Weak semantic candidates are removed early.\n            # ----------------------------------------------\n\nif original_score < self.min_score:\n                continue"
   },
   {
     "vector_id": 39,
+    "document_id": "app_rag_reranker.py",
+    "source": "app\\rag\\reranker.py",
+    "chunk_index": 3,
+    "content": "# ----------------------------------------------\n            # Lexical relevance\n            # ----------------------------------------------\n\nlexical_score = (\n                self._calculate_lexical_score(\n                    query_tokens=query_tokens,\n                    content=content,\n                )\n            )\n\n# ----------------------------------------------\n            # Optional lexical filtering.\n            # ----------------------------------------------\n\nif (\n                lexical_score\n                < self.min_lexical_overlap\n            ):\n                continue\n\n# ----------------------------------------------\n            # Final combined score\n            # ----------------------------------------------\n\nfinal_score = (\n                self.semantic_weight\n                * original_score\n            ) + (\n                self.lexical_weight\n                * lexical_score\n            )\n\nfinal_score = self._clamp(\n                final_score,\n                0.0,\n                1.0,\n            )\n\nreranked.append(\n                RerankedResult(\n                    content=content,\n                    score=final_score,\n                    original_score=original_score,\n                    metadata=self._safe_metadata(\n                        result.metadata\n                    ),\n                )\n            )\n\n# ------------------------------------------------------\n        # Deterministic ranking.\n        #\n        # First:\n        #   final reranking score\n        #\n        # Second:\n        #   original semantic score\n        #\n        # This prevents unstable ordering when final scores\n        # are identical.\n        # ------------------------------------------------------\n\nreranked.sort(\n            key=lambda item: (\n                item.score,\n                item.original_score,\n            ),\n            reverse=True,\n        )\n\n# ------------------------------------------------------\n        # Final top-K selection.\n        # ------------------------------------------------------\n\nlimit = (\n            self.top_k\n            if top_k is None\n            else max(1, int(top_k))\n        )\n\nreturn reranked[:limit]\n\n# ==========================================================\n    # LEXICAL SCORING\n    # ==========================================================\n\ndef _calculate_lexical_score(\n        self,\n        query_tokens: set[str],\n        content: str,\n    ) -> float:\n        \"\"\"\n        Calculate lightweight lexical relevance.\n\nThe score represents how much of the meaningful query\n        vocabulary is represented inside the document chunk.\n\nExample:\n\nQuery:\n                \"How does VectorStore search embeddings?\"\n\nChunk:\n                \"VectorStore searches embeddings using FAISS.\"\n\nA high percentage of query terms are represented,\n        resulting in a stronger lexical score.\n\nReturns\n        -------\n        float\n            Score between 0.0 and 1.0.\n        \"\"\"\n\nif not query_tokens:\n            return 0.0\n\ncontent_tokens = self._tokenize(\n            content\n        )\n\nif not content_tokens:\n            return 0.0\n\nmatched_tokens = (\n            query_tokens\n            & content_tokens\n        )\n\ncoverage = (\n            len(matched_tokens)\n            / len(query_tokens)\n        )\n\n# ------------------------------------------------------\n        # Small bonus when the complete query phrase appears.\n        # ------------------------------------------------------\n\nnormalized_query = self._normalize_text(\n            \" \".join(sorted(query_tokens))\n        )\n\nnormalized_content = self._normalize_text(\n            content\n        )\n\nphrase_bonus = 0.0\n\nif normalized_query and (\n            normalized_query\n            in normalized_content\n        ):\n            phrase_bonus = 0.15\n\nreturn self._clamp(\n            coverage + phrase_bonus,\n            0.0,\n            1.0,\n        )\n\n# ==========================================================\n    # TOKENIZATION\n    # ==========================================================\n\ndef _tokenize(\n        self,\n        text: str,\n    ) -> set[str]:\n        \"\"\"\n        Convert text into normalized meaningful tokens.\n\nStop words are removed so common words do not dominate\n        the relevance calculation.\n        \"\"\"\n\nnormalized = self._normalize_text(\n            text\n        )\n\ntokens = re.findall(\n            r\"[a-zA-Z0-9_]+\",\n            normalized,\n        )\n\nreturn {\n            token\n            for token in tokens\n            if (\n                len(token) > 1\n                and token not in self.STOP_WORDS\n            )\n        }\n\n# ==========================================================\n    # TEXT NORMALIZATION\n    # ==========================================================\n\n@staticmethod\n    def _normalize_text(\n        text: str,\n    ) -> str:\n        \"\"\"\n        Normalize text for lexical comparison.\n        \"\"\"\n\nreturn \" \".join(\n            str(text)\n            .lower()\n            .strip()\n            .split()\n        )\n\n# ==========================================================\n    # DUPLICATE REMOVAL\n    # ==========================================================\n\ndef _remove_duplicates(\n        self,\n        results: list[RetrievalResult],\n    ) -> list[RetrievalResult]:\n        \"\"\"\n        Remove duplicate chunks.\n\nDeduplication is performed using normalized content.\n\nKeeping the first occurrence preserves the highest\n        ranked candidate because Retriever results are expected\n        to already be similarity ordered.\n        \"\"\"\n\nseen: set[str] = set()\n\nunique_results = []\n\nfor result in results:\n\ncontent = self._clean_content(\n                result.content\n            )\n\nif not content:\n                continue\n\ncontent_key = self._normalize_text(\n                content\n            )\n\nif content_key in seen:\n                continue\n\nseen.add(content_key)\n\nunique_results.append(\n                result\n            )\n\nreturn unique_results"
+  },
+  {
+    "vector_id": 40,
+    "document_id": "app_rag_reranker.py",
+    "source": "app\\rag\\reranker.py",
+    "chunk_index": 4,
+    "content": "# ==========================================================\n    # SAFE CONTENT\n    # ==========================================================\n\n@staticmethod\n    def _clean_content(\n        content: Any,\n    ) -> str:\n        \"\"\"\n        Safely convert candidate content to text.\n\nProtects the reranker from malformed metadata or\n        unexpected values.\n        \"\"\"\n\nif content is None:\n            return \"\"\n\nif not isinstance(content, str):\n            content = str(content)\n\nreturn content.strip()\n\n# ==========================================================\n    # SAFE METADATA\n    # ==========================================================\n\n@staticmethod\n    def _safe_metadata(\n        metadata: Any,\n    ) -> dict[str, Any]:\n        \"\"\"\n        Ensure metadata always has a dictionary structure.\n        \"\"\"\n\nif isinstance(\n            metadata,\n            dict,\n        ):\n            return dict(metadata)\n\nreturn {}\n\n# ==========================================================\n    # SAFE SCORE\n    # ==========================================================\n\n@staticmethod\n    def _safe_score(\n        score: Any,\n    ) -> float:\n        \"\"\"\n        Safely convert similarity scores to float.\n\nInvalid values become 0.0.\n        \"\"\"\n\ntry:\n            value = float(score)\n        except (\n            TypeError,\n            ValueError,\n        ):\n            return 0.0\n\nif value != value:\n            return 0.0\n\nreturn max(\n            0.0,\n            min(value, 1.0),\n        )\n\n# ==========================================================\n    # CLAMP\n    # ==========================================================\n\n@staticmethod\n    def _clamp(\n        value: float,\n        minimum: float,\n        maximum: float,\n    ) -> float:\n        \"\"\"\n        Keep a numeric value inside a safe range.\n        \"\"\"\n\nreturn max(\n            minimum,\n            min(float(value), maximum),\n        )\n\n# ==============================================================\n# SHARED RERANKER INSTANCE\n# ==============================================================\n\nreranker = Reranker(\n    top_k=5,\n    min_score=0.35,\n    semantic_weight=0.75,\n    lexical_weight=0.25,\n    min_lexical_overlap=0.0,\n)"
+  },
+  {
+    "vector_id": 41,
     "document_id": "app_rag_retriever.py",
     "source": "app\\rag\\retriever.py",
     "chunk_index": 0,
     "content": "from dataclasses import dataclass\nfrom typing import Any\n\nfrom app.rag.embeddings import embedding_service\n\n\n\n# ============================================================\n# RETRIEVAL RESULT\n# ============================================================\n\n@dataclass"
   },
   {
-    "vector_id": 40,
+    "vector_id": 42,
     "document_id": "app_rag_retriever.py",
     "source": "app\\rag\\retriever.py",
     "chunk_index": 1,
     "content": "class RetrievalResult:\n    \"\"\"\n    Represents one piece of knowledge returned by the retriever.\n    \"\"\"\n\n    content: str\n    score: float\n\n    metadata: dict[str, Any]\n\n\n# ============================================================\n# RETRIEVER\n# ============================================================"
   },
   {
-    "vector_id": 41,
+    "vector_id": 43,
     "document_id": "app_rag_retriever.py",
     "source": "app\\rag\\retriever.py",
     "chunk_index": 2,
     "content": "class Retriever:\n    \"\"\"\n    Semantic retriever for the NEXA AI RAG pipeline.\n\nResponsibilities:\n        1. Convert user query into an embedding.\n        2. Search the vector store.\n        3. Calculate/obtain similarity scores.\n        4. Apply minimum relevance filtering.\n        5. Return the most relevant chunks.\n\nThe actual vector database is intentionally kept separate.\n    This allows us to later use PostgreSQL + pgvector, Qdrant,\n    or another production vector database without changing\n    the rest of the RAG pipeline.\n    \"\"\"\n\ndef __init__(\n        self,\n        vector_store=None,\n        top_k: int = 8,\n        similarity_threshold: float = 0.35,\n    ):\n        self.vector_store = vector_store\n\nself.top_k = max(\n            1,\n            top_k,\n        )\n\nself.similarity_threshold = max(\n            0.0,\n            min(similarity_threshold, 1.0),\n        )\n\n# ========================================================\n    # QUERY EMBEDDING\n    # ========================================================\n\ndef _create_query_embedding(\n        self,\n        query: str,\n    ) -> list[float]:\n\nif not query or not query.strip():\n            return []\n\nreturn embedding_service.embed_query(\n            query.strip()\n        )\n\n# ========================================================\n    # VECTOR SEARCH\n    # ========================================================\n\ndef _search_vector_store(\n        self,\n        query_embedding: list[float],\n        top_k: int,\n    ) -> list[dict[str, Any]]:\n\nif self.vector_store is None:\n            raise RuntimeError(\n                \"Vector store is not configured.\"\n            )\n\nif not query_embedding:\n            return []\n\n\"\"\"\n        The vector store must expose:\n\nsearch(\n                embedding=query_embedding,\n                top_k=top_k\n            )\n\nExpected result format:\n\n[\n                {\n                    \"content\": \"...\",\n                    \"score\": 0.87,\n                    \"metadata\": {...}\n                }\n            ]\n        \"\"\"\n\nresults = self.vector_store.search(\n            embedding=query_embedding,\n            top_k=top_k,\n        )\n\nif not results:\n            return []\n\nreturn results\n\n# ========================================================\n    # NORMALIZE RESULTS\n    # ========================================================\n\ndef _normalize_results(\n        self,\n        results: list[dict[str, Any]],\n    ) -> list[RetrievalResult]:\n\nnormalized = []\n\nfor result in results:\n\ncontent = str(\n                result.get(\"content\", \"\")\n            ).strip()\n\nif not content:\n                continue\n\ntry:\n                score = float(\n                    result.get(\"score\", 0.0)\n                )\n            except (\n                TypeError,\n                ValueError,\n            ):\n                score = 0.0\n\nmetadata = result.get(\n                \"metadata\",\n                {},\n            )\n\nif not isinstance(\n                metadata,\n                dict,\n            ):\n                metadata = {}\n\nnormalized.append(\n                RetrievalResult(\n                    content=content,\n                    score=score,\n                    metadata=metadata,\n                )\n            )\n\nreturn normalized\n\n# ========================================================\n    # RELEVANCE FILTER\n    # ========================================================\n\ndef _filter_by_relevance(\n        self,\n        results: list[RetrievalResult],\n    ) -> list[RetrievalResult]:\n\nreturn [\n            result\n            for result in results\n            if result.score\n            >= self.similarity_threshold\n        ]\n\n# ========================================================\n    # REMOVE DUPLICATES\n    # ========================================================\n\ndef _remove_duplicates(\n        self,\n        results: list[RetrievalResult],\n    ) -> list[RetrievalResult]:\n\nseen = set()\n\nunique_results = []\n\nfor result in results:\n\n# Prefer chunk ID when available.\n            chunk_id = result.metadata.get(\n                \"chunk_id\"\n            )\n\nif chunk_id is not None:\n                duplicate_key = (\n                    \"chunk_id\",\n                    str(chunk_id),\n                )\n            else:\n                duplicate_key = (\n                    \"content\",\n                    result.content,\n                )\n\nif duplicate_key in seen:\n                continue\n\nseen.add(\n                duplicate_key\n            )\n\nunique_results.append(\n                result\n            )\n\nreturn unique_results\n\n# ========================================================\n    # SORT RESULTS\n    # ========================================================\n\ndef _sort_results(\n        self,\n        results: list[RetrievalResult],\n    ) -> list[RetrievalResult]:\n\nreturn sorted(\n            results,\n            key=lambda result: result.score,\n            reverse=True,\n        )\n\n# ========================================================\n    # MAIN RETRIEVAL\n    # ========================================================\n\ndef retrieve(\n        self,\n        query: str,\n        top_k: int | None = None,\n    ) -> list[RetrievalResult]:\n        \"\"\"\n        Retrieve the most relevant knowledge for a query.\n        \"\"\"\n\nquery = query.strip()\n\nif not query:\n            return []\n\nrequested_top_k = (\n            top_k\n            if top_k is not None\n            else self.top_k\n        )\n\nrequested_top_k = max(\n            1,\n            requested_top_k,\n        )\n\n# ----------------------------------------------------\n        # 1. Convert query → embedding\n        # ----------------------------------------------------\n\nquery_embedding = (\n            self._create_query_embedding(\n                query\n            )\n        )\n\nif not query_embedding:\n            return []"
   },
   {
-    "vector_id": 42,
+    "vector_id": 44,
     "document_id": "app_rag_retriever.py",
     "source": "app\\rag\\retriever.py",
     "chunk_index": 3,
     "content": "# ----------------------------------------------------\n        # 2. Search vector database\n        #\n        # Retrieve extra candidates because filtering\n        # and deduplication may remove some results.\n        # ----------------------------------------------------\n\ncandidate_count = max(\n            requested_top_k * 3,\n            requested_top_k + 5,\n        )\n\nraw_results = (\n            self._search_vector_store(\n                query_embedding=query_embedding,\n                top_k=candidate_count,\n            )\n        )\n\n# ----------------------------------------------------\n        # 3. Normalize\n        # ----------------------------------------------------\n\nresults = self._normalize_results(\n            raw_results\n        )\n\n# ----------------------------------------------------\n        # 4. Relevance filtering\n        # ----------------------------------------------------\n\nresults = self._filter_by_relevance(\n            results\n        )\n\n# ----------------------------------------------------\n        # 5. Remove duplicate chunks\n        # ----------------------------------------------------\n\nresults = self._remove_duplicates(\n            results\n        )\n\n# ----------------------------------------------------\n        # 6. Sort by similarity\n        # ----------------------------------------------------\n\nresults = self._sort_results(\n            results\n        )\n\n# ----------------------------------------------------\n        # 7. Return final top-K\n        # ----------------------------------------------------\n\nreturn results[\n            :requested_top_k\n        ]\n\n# ============================================================\n# SHARED RETRIEVER INSTANCE\n# ============================================================\nfrom app.rag.vector_store import vector_store\nretriever = Retriever(\n    vector_store=vector_store,\n    top_k=8,\n    similarity_threshold=0.35,\n)"
   },
   {
-    "vector_id": 43,
+    "vector_id": 45,
     "document_id": "app_rag_vector_store.py",
     "source": "app\\rag\\vector_store.py",
     "chunk_index": 0,
     "content": "from pathlib import Path\nimport json\nfrom typing import Any\n\nimport faiss\nimport numpy as np\n\nfrom app.rag.embeddings import embedding_service"
   },
   {
-    "vector_id": 44,
+    "vector_id": 46,
     "document_id": "app_rag_vector_store.py",
     "source": "app\\rag\\vector_store.py",
     "chunk_index": 1,
     "content": "class VectorStore:\n    \"\"\"\n    Persistent FAISS vector store.\n\nResponsibilities:\n    - Store document embeddings\n    - Store chunk metadata\n    - Persist FAISS index to disk\n    - Search for semantically similar chunks\n    \"\"\"\n\ndef __init__(\n        self,\n        index_path: str = \"data/vector_store/index.faiss\",\n        metadata_path: str = \"data/vector_store/metadata.json\",\n    ):\n        self.index_path = Path(index_path)\n        self.metadata_path = Path(metadata_path)\n\nself.index_path.parent.mkdir(\n            parents=True,\n            exist_ok=True,\n        )\n\nself.index = None\n        self.metadata: list[dict[str, Any]] = []\n\nself._load()\n\n# ============================================================\n    # LOAD EXISTING STORE\n    # ============================================================\n\ndef _load(self):\n        \"\"\"\n        Load existing FAISS index and metadata.\n        \"\"\"\n\nif (\n            self.index_path.exists()\n            and self.metadata_path.exists()\n        ):\n            self.index = faiss.read_index(\n                str(self.index_path)\n            )\n\nwith open(\n                self.metadata_path,\n                \"r\",\n                encoding=\"utf-8\",\n            ) as file:\n                self.metadata = json.load(file)\n\nreturn\n\nself.index = None\n        self.metadata = []\n\n# ============================================================\n    # SAVE STORE\n    # ============================================================\n\ndef _save(self):\n        \"\"\"\n        Persist FAISS index and metadata.\n        \"\"\"\n\nif self.index is not None:\n            faiss.write_index(\n                self.index,\n                str(self.index_path),\n            )\n\nwith open(\n            self.metadata_path,\n            \"w\",\n            encoding=\"utf-8\",\n        ) as file:\n            json.dump(\n                self.metadata,\n                file,\n                ensure_ascii=False,\n                indent=2,\n            )\n\n# ============================================================\n    # ADD DOCUMENT CHUNKS\n    # ============================================================\n\ndef add_chunks(\n        self,\n        chunks: list[str],\n        source: str,\n        document_id: str | None = None,\n    ):\n        \"\"\"\n        Convert chunks into embeddings and add them\n        to the FAISS index.\n        \"\"\"\n\nif not chunks:\n            return\n\nembeddings = embedding_service.embed_documents(\n            chunks\n        )\n\nvectors = np.asarray(\n            embeddings,\n            dtype=\"float32\",\n        )\n\n# --------------------------------------------------------\n        # Create index on first insertion\n        # --------------------------------------------------------\n\nif self.index is None:\n\ndimension = vectors.shape[1]\n\nself.index = faiss.IndexFlatIP(\n                dimension\n            )\n\n# Normalize vectors so inner product\n            # behaves like cosine similarity.\n            faiss.normalize_L2(vectors)\n\nself.index.add(vectors)\n\nelse:\n\n# Normalize before adding\n            faiss.normalize_L2(vectors)\n\nself.index.add(vectors)\n\n# --------------------------------------------------------\n        # Store metadata\n        # --------------------------------------------------------\n\nstart_id = len(self.metadata)\n\nfor offset, chunk in enumerate(chunks):\n\nself.metadata.append(\n                {\n                    \"vector_id\": start_id + offset,\n                    \"document_id\": document_id,\n                    \"source\": source,\n                    \"chunk_index\": offset,\n                    \"content\": chunk,\n                }\n            )\n\nself._save()\n\n# ============================================================\n    # SEARCH\n    # ============================================================\n\ndef search(\n        self,\n        embedding: list[float],\n        top_k: int = 5,\n    ) -> list[dict[str, Any]]:\n        \"\"\"\n        Search FAISS using a pre-compute query embedding.\n        \"\"\"\n\nif self.index is None:\n            return []\n\nif self.index.ntotal == 0:\n            return []\n\nif not embedding:\n            return []\n\nquery_vector = np.asarray(\n            [embedding],\n            dtype=\"float32\",\n        )\n\n# Normalize for cosine similarity\n        faiss.normalize_L2(query_vector)\n\nscores, indices = self.index.search(\n            query_vector,\n            min(top_k, self.index.ntotal),\n        )\n\nresults = []\n\nfor score, index_id in zip(\n            scores[0],\n            indices[0],\n        ):\n\nif index_id < 0:\n                continue\n\nif index_id >= len(self.metadata):\n                continue\n\nmetadata = self.metadata[index_id].copy()\n\nresults.append(\n                {\n                    \"content\": metadata.get(\n                        \"content\",\n                        \"\",\n                    ),\n                    \"score\": float(score),\n                    \"metadata\": metadata,\n                }\n            )\n\nreturn results\n\n# ============================================================\n    # COUNT\n    # ============================================================\n\ndef count(self) -> int:\n        \"\"\"\n        Return number of indexed chunks.\n        \"\"\"\n\nif self.index is None:\n            return 0\n\nreturn self.index.ntotal\n\n# ============================================================\n    # CLEAR\n    # ============================================================\n\ndef clear(self):\n        \"\"\"\n        Delete the current vector index and metadata.\n        \"\"\"\n\nself.index = None\n        self.metadata = []\n\nif self.index_path.exists():\n            self.index_path.unlink()\n\nif self.metadata_path.exists():\n            self.metadata_path.unlink()\n\n# ================================================================\n# SHARED INSTANCE\n# ================================================================\n\nvector_store = VectorStore()"
   },
   {
-    "vector_id": 45,
+    "vector_id": 47,
     "document_id": "app_schemas_conversation.py",
     "source": "app\\schemas\\conversation.py",
     "chunk_index": 0,
     "content": "from datetime import datetime\nfrom pydantic import BaseModel, ConfigDict"
   },
   {
-    "vector_id": 46,
+    "vector_id": 48,
     "document_id": "app_schemas_conversation.py",
     "source": "app\\schemas\\conversation.py",
     "chunk_index": 1,
     "content": "class ConversationCreate(BaseModel):\n    user_id : int\n    title: str =\"New Conversation\""
   },
   {
-    "vector_id": 47,
+    "vector_id": 49,
     "document_id": "app_schemas_conversation.py",
     "source": "app\\schemas\\conversation.py",
     "chunk_index": 2,
     "content": "class ConversationUpdate(BaseModel):\n    title: str"
   },
   {
-    "vector_id": 48,
+    "vector_id": 50,
     "document_id": "app_schemas_conversation.py",
     "source": "app\\schemas\\conversation.py",
     "chunk_index": 3,
     "content": "class ConversationResponse(BaseModel):\n    id: int\n    user_id : int\n    title: str\n    created_at: datetime\n\n    model_config = ConfigDict(from_attributes=True)"
   },
   {
-    "vector_id": 49,
+    "vector_id": 51,
     "document_id": "app_schemas_message.py",
     "source": "app\\schemas\\message.py",
     "chunk_index": 0,
     "content": "from datetime import datetime\n\nfrom pydantic import BaseModel, ConfigDict"
   },
   {
-    "vector_id": 50,
+    "vector_id": 52,
     "document_id": "app_schemas_message.py",
     "source": "app\\schemas\\message.py",
     "chunk_index": 1,
     "content": "class MessageCreate(BaseModel):\n    content: str"
   },
   {
-    "vector_id": 51,
+    "vector_id": 53,
     "document_id": "app_schemas_message.py",
     "source": "app\\schemas\\message.py",
     "chunk_index": 2,
     "content": "class MessageResponse(BaseModel):\n    id: int\n    conversation_id: int\n    role: str\n    content: str\n    created_at: datetime\n\n    model_config = ConfigDict(from_attributes=True)"
   },
   {
-    "vector_id": 52,
+    "vector_id": 54,
     "document_id": "app_schemas_user.py",
     "source": "app\\schemas\\user.py",
     "chunk_index": 0,
     "content": "from datetime import datetime\n\nfrom pydantic import BaseModel, ConfigDict"
   },
   {
-    "vector_id": 53,
+    "vector_id": 55,
     "document_id": "app_schemas_user.py",
     "source": "app\\schemas\\user.py",
     "chunk_index": 1,
     "content": "class UserCreate(BaseModel):\n    email: str"
   },
   {
-    "vector_id": 54,
+    "vector_id": 56,
     "document_id": "app_schemas_user.py",
     "source": "app\\schemas\\user.py",
     "chunk_index": 2,
     "content": "class UserResponse(BaseModel):\n    id: int\n    email: str\n    created_at: datetime\n\n    model_config = ConfigDict(from_attributes=True)"
-  },
-  {
-    "vector_id": 55,
-    "document_id": "app_services_ai_service.py",
-    "source": "app\\services\\ai_service.py",
-    "chunk_index": 0,
-    "content": "from collections.abc import Generator\n\nfrom google import genai\nfrom google.genai import types\n\nfrom app.core.config import settings"
-  },
-  {
-    "vector_id": 56,
-    "document_id": "app_services_ai_service.py",
-    "source": "app\\services\\ai_service.py",
-    "chunk_index": 1,
-    "content": "class AIService:\n\n    def __init__(self):\n        if not settings.gemini_api_key:\n            raise ValueError(\n                \"GEMINI_API_KEY is not configured.\"\n            )\n\n        self.client = genai.Client(\n            api_key=settings.gemini_api_key\n        )\n\n    # ========================================================\n    # SYSTEM INSTRUCTION\n    # ========================================================\n\n    SYSTEM_INSTRUCTION = \"\"\"\nYou are NEXA AI, a professional and helpful AI assistant.\n\nRules:\n- Be accurate and clear.\n- Answer the user's question directly.\n- Remember information from the provided conversation history.\n- Do not invent personal information about the user.\n- If information is not available in the conversation, say that you do not know.\n- Keep simple questions concise.\n- For technical questions, provide structured explanations.\n- Use markdown when it improves readability.\n\"\"\"\n\n    # ========================================================\n    # BUILD CONVERSATION\n    # ========================================================\n\n    def _build_prompt(\n        self,\n        user_message: str,\n        conversation_history: list[dict] | None = None,\n    ) -> str:\n\n        conversation_history = conversation_history or []\n\n        prompt_parts = []\n\n        for message in conversation_history:\n\n            role = message.get(\"role\")\n            content = message.get(\"content\", \"\").strip()\n\n            if not content:\n                continue\n\n            if role == \"user\":\n                prompt_parts.append(\n                    f\"User: {content}\"\n                )\n\n            elif role == \"assistant\":\n                prompt_parts.append(\n                    f\"Assistant: {content}\"\n                )\n\n        prompt_parts.append(\n            f\"User: {user_message}\"\n        )\n\n        return \"\\n\\n\".join(prompt_parts)\n\n    # ========================================================\n    # NORMAL RESPONSE\n    # ========================================================\n\n    def generate_response(\n        self,\n        user_message: str,\n        conversation_history: list[dict] | None = None,\n    ) -> str:\n\n        prompt = self._build_prompt(\n            user_message=user_message,\n            conversation_history=conversation_history,\n        )\n\n        response = self.client.models.generate_content(\n            model=settings.gemini_model,\n            contents=prompt,\n            config=types.GenerateContentConfig(\n                system_instruction=self.SYSTEM_INSTRUCTION,\n                max_output_tokens=700,\n            ),\n        )\n\n        return response.text or (\n            \"I'm sorry, but I couldn't generate a response.\"\n        )\n\n    # ========================================================\n    # STREAMING RESPONSE\n    # ========================================================\n\n    def generate_response_stream(\n        self,\n        user_message: str,\n        conversation_history: list[dict] | None = None,\n    ) -> Generator[str, None, None]:\n\n        prompt = self._build_prompt(\n            user_message=user_message,\n            conversation_history=conversation_history,\n        )\n\n        response_stream = (\n            self.client.models.generate_content_stream(\n                model=settings.gemini_model,\n                contents=prompt,\n                config=types.GenerateContentConfig(\n                    system_instruction=self.SYSTEM_INSTRUCTION,\n                    max_output_tokens=700,\n                ),\n            )\n        )\n\n        for chunk in response_stream:\n\n            text = getattr(chunk, \"text\", None)\n\n            if text:\n                yield text\n\n\n# ============================================================\n# SHARED SERVICE INSTANCE\n# ============================================================\n\nai_service = AIService()"
   },
   {
     "vector_id": 57,
@@ -677,5 +677,75 @@
     "source": "data\\knowledge_base\\test_document.txt",
     "chunk_index": 3,
     "content": "The embedding model used by NEXA AI is gemini-embedding-001."
+  },
+  {
+    "vector_id": 97,
+    "document_id": "data_knowledge_base_vector_store.md",
+    "source": "data\\knowledge_base\\vector_store.md",
+    "chunk_index": 0,
+    "content": "# VectorStore\n\nVectorStore is the persistent FAISS-based vector store used by NEXA AI.\n\nIt stores document embeddings and metadata and performs semantic similarity search."
+  },
+  {
+    "vector_id": 98,
+    "document_id": "data_knowledge_base_vector_store.md",
+    "source": "data\\knowledge_base\\vector_store.md",
+    "chunk_index": 1,
+    "content": "## Responsibilities\n\n- Store document embeddings.\n- Store document chunk metadata.\n- Persist the FAISS index to disk.\n- Search for semantically similar chunks.\n- Return relevant chunks with similarity scores."
+  },
+  {
+    "vector_id": 99,
+    "document_id": "data_knowledge_base_vector_store.md",
+    "source": "data\\knowledge_base\\vector_store.md",
+    "chunk_index": 2,
+    "content": "## Technology\n\nNEXA AI uses:\n\n- FAISS for vector similarity search.\n- NumPy for vector representation.\n- JSON for metadata persistence.\n\nThe FAISS index uses `IndexFlatIP`.\n\nVectors are normalized before searching so inner product behaves like cosine similarity."
+  },
+  {
+    "vector_id": 100,
+    "document_id": "data_knowledge_base_vector_store.md",
+    "source": "data\\knowledge_base\\vector_store.md",
+    "chunk_index": 3,
+    "content": "## Metadata\n\nEach indexed chunk stores:\n\n- vector_id\n- document_id\n- source\n- chunk_index\n- content"
+  },
+  {
+    "vector_id": 101,
+    "document_id": "data_knowledge_base_vector_store.md",
+    "source": "data\\knowledge_base\\vector_store.md",
+    "chunk_index": 4,
+    "content": "## Main Operations"
+  },
+  {
+    "vector_id": 102,
+    "document_id": "data_knowledge_base_vector_store.md",
+    "source": "data\\knowledge_base\\vector_store.md",
+    "chunk_index": 5,
+    "content": "### add_chunks()\n\nReceives document chunks, creates embeddings through EmbeddingService, and adds them to FAISS."
+  },
+  {
+    "vector_id": 103,
+    "document_id": "data_knowledge_base_vector_store.md",
+    "source": "data\\knowledge_base\\vector_store.md",
+    "chunk_index": 6,
+    "content": "### search()\n\nReceives a query embedding and returns the most similar document chunks."
+  },
+  {
+    "vector_id": 104,
+    "document_id": "data_knowledge_base_vector_store.md",
+    "source": "data\\knowledge_base\\vector_store.md",
+    "chunk_index": 7,
+    "content": "### count()\n\nReturns the number of indexed chunks."
+  },
+  {
+    "vector_id": 105,
+    "document_id": "data_knowledge_base_vector_store.md",
+    "source": "data\\knowledge_base\\vector_store.md",
+    "chunk_index": 8,
+    "content": "### clear()\n\nRemoves the current FAISS index and metadata."
+  },
+  {
+    "vector_id": 106,
+    "document_id": "data_knowledge_base_vector_store.md",
+    "source": "data\\knowledge_base\\vector_store.md",
+    "chunk_index": 9,
+    "content": "## Relationship With EmbeddingService\n\nEmbeddingService creates the vectors.\n\nVectorStore stores and searches those vectors.\n\nFlow:\n\nDocument\n→ DocumentProcessor\n→ EmbeddingService\n→ VectorStore\n→ FAISS\n\nQuery:\n\nUser Query\n→ EmbeddingService\n→ VectorStore\n→ Similarity Search\n→ Relevant Chunks"
   }
 ]

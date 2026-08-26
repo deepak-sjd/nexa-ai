@@ -134,10 +134,7 @@ def create_message(
     db.refresh(assistant_message)
 
     # 6. Return both messages
-    return [
-        user_message,
-        assistant_message,
-    ]
+    return [assistant_message]
 
 @router.post(
     "/{conversation_id}/messages/stream",
