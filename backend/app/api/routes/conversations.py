@@ -87,7 +87,8 @@ def get_user_conversations(
             Conversation.user_id == user_id
         )
         .order_by(
-            Conversation.created_at.desc()
+            Conversation.is_pinned.desc(),
+            Conversation.created_at.desc(),
         )
         .all()
     )
@@ -126,7 +127,7 @@ def get_conversation(
 
 
 # ============================================================
-# RENAME CONVERSATION
+# UPDATE CONVERSATION (rename and/or pin)
 # ============================================================
 
 @router.patch(
@@ -153,7 +154,15 @@ def update_conversation(
             detail="Conversation not found",
         )
 
-    conversation.title = data.title
+    update_fields = data.model_dump(
+        exclude_unset=True
+    )
+
+    if "title" in update_fields:
+        conversation.title = update_fields["title"]
+
+    if "is_pinned" in update_fields:
+        conversation.is_pinned = update_fields["is_pinned"]
 
     db.commit()
     db.refresh(conversation)

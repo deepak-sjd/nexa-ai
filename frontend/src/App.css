@@ -321,6 +321,116 @@ textarea {
 
 
 /* =========================================================
+   SIDEBAR SEARCH
+   ========================================================= */
+
+.sidebar-search {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+
+  margin: 14px 2px 0;
+}
+
+.sidebar-search-icon {
+  position: absolute;
+  left: 11px;
+
+  color: #656671;
+
+  font-size: 13px;
+
+  pointer-events: none;
+}
+
+.sidebar-search-input {
+  width: 100%;
+
+  padding: 8px 30px 8px 30px;
+
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+
+  color: #e6e6ea;
+
+  background: rgba(255, 255, 255, 0.03);
+
+  font-size: 12.5px;
+
+  outline: none;
+
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.sidebar-search-input::placeholder {
+  color: #656671;
+}
+
+.sidebar-search-input:focus {
+  border-color: rgba(109, 103, 244, 0.5);
+
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.sidebar-search-clear {
+  position: absolute;
+  right: 8px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 18px;
+  height: 18px;
+
+  border: none;
+  border-radius: 999px;
+
+  color: #9a9ba8;
+
+  background: rgba(255, 255, 255, 0.06);
+
+  font-size: 12px;
+  line-height: 1;
+
+  cursor: pointer;
+}
+
+.sidebar-search-clear:hover {
+  color: #fff;
+
+  background: rgba(255, 255, 255, 0.12);
+}
+
+
+/* =========================================================
+   CONVERSATION SECTIONS (Pinned / Today / Yesterday / ...)
+   ========================================================= */
+
+.conversation-section {
+  margin-bottom: 4px;
+}
+
+.conversation-section-label {
+  margin: 14px 7px 4px;
+
+  color: #55566a;
+
+  font-size: 10px;
+  font-weight: 600;
+
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.conversation-section:first-child
+  .conversation-section-label {
+  margin-top: 4px;
+}
+
+
+/* =========================================================
    CONVERSATION HEADING
    ========================================================= */
 
@@ -500,7 +610,8 @@ textarea {
 }
 
 .conversation-item:hover .conversation-actions,
-.conversation-item.active .conversation-actions {
+.conversation-item.active .conversation-actions,
+.conversation-item.pinned-item .conversation-actions {
   opacity: 1;
 }
 
@@ -533,6 +644,24 @@ textarea {
   color: #ff6b6b;
 
   background: rgba(255, 70, 70, 0.09);
+}
+
+.conversation-action.pin {
+  font-size: 11px;
+
+  filter: grayscale(1) opacity(0.7);
+}
+
+.conversation-action.pin:hover {
+  filter: none;
+
+  background: rgba(109, 103, 244, 0.12);
+}
+
+.conversation-action.pin.pinned {
+  filter: none;
+
+  color: #8580ff;
 }
 
 

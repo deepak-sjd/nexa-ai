@@ -37,6 +37,8 @@ function App() {
 
   const [editingTitle, setEditingTitle] = useState("");
 
+  const [searchQuery, setSearchQuery] = useState("");
+
   // ============================================================
   // REFS
   // ============================================================
@@ -451,7 +453,7 @@ function App() {
   async function deleteConversation(
     conversationIdToDelete
   ) {
-    if (loading && conversationIdToDelete === conversationId) {
+    if (loading) {
       return;
     }
 
@@ -514,9 +516,141 @@ function App() {
     }
   }
 
+  // ============================================================
+  // PIN / UNPIN CONVERSATION
+  // ============================================================
 
+  async function togglePinConversation(conversation) {
+    const nextPinned = !conversation.is_pinned;
 
-    // ============================================================
+    // Optimistic update — flip it locally right away.
+    setConversations((previous) =>
+      previous.map((item) =>
+        item.id === conversation.id
+          ? { ...item, is_pinned: nextPinned }
+          : item
+      )
+    );
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/conversations/${conversation.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            is_pinned: nextPinned,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Could not update pin state");
+      }
+
+      const updated = await response.json();
+
+      setConversations((previous) =>
+        previous.map((item) =>
+          item.id === conversation.id ? updated : item
+        )
+      );
+    } catch (error) {
+      console.error("Pin conversation error:", error);
+
+      // Roll back the optimistic update on failure.
+      setConversations((previous) =>
+        previous.map((item) =>
+          item.id === conversation.id
+            ? { ...item, is_pinned: conversation.is_pinned }
+            : item
+        )
+      );
+    }
+  }
+
+  // ============================================================
+  // GROUP CONVERSATIONS (search + pinned + date buckets)
+  // ============================================================
+
+  function getConversationGroups(allConversations, query) {
+    const trimmedQuery = query.trim().toLowerCase();
+
+    const filtered = trimmedQuery
+      ? allConversations.filter((conversation) =>
+          (conversation.title || "")
+            .toLowerCase()
+            .includes(trimmedQuery)
+        )
+      : allConversations;
+
+    const pinned = filtered.filter(
+      (conversation) => conversation.is_pinned
+    );
+
+    const unpinned = filtered.filter(
+      (conversation) => !conversation.is_pinned
+    );
+
+    const now = new Date();
+
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfToday.getDate() - 1);
+
+    const startOfWeek = new Date(startOfToday);
+    startOfWeek.setDate(startOfToday.getDate() - 7);
+
+    const buckets = {
+      today: [],
+      yesterday: [],
+      previous7Days: [],
+      older: [],
+    };
+
+    for (const conversation of unpinned) {
+      const createdAt = new Date(conversation.created_at);
+
+      if (createdAt >= startOfToday) {
+        buckets.today.push(conversation);
+      } else if (createdAt >= startOfYesterday) {
+        buckets.yesterday.push(conversation);
+      } else if (createdAt >= startOfWeek) {
+        buckets.previous7Days.push(conversation);
+      } else {
+        buckets.older.push(conversation);
+      }
+    }
+
+    return {
+      pinned,
+      sections: [
+        { key: "today", label: "Today", items: buckets.today },
+        {
+          key: "yesterday",
+          label: "Yesterday",
+          items: buckets.yesterday,
+        },
+        {
+          key: "previous7Days",
+          label: "Previous 7 Days",
+          items: buckets.previous7Days,
+        },
+        { key: "older", label: "Older", items: buckets.older },
+      ].filter((section) => section.items.length > 0),
+      isEmpty: pinned.length === 0 && unpinned.length === 0,
+    };
+  }
+
+  // ============================================================
   // APPLY AUTO-GENERATED TITLE (from SSE "done" event)
   // ============================================================
 
@@ -852,6 +986,8 @@ function App() {
                 );
               }
 
+              applyConversationTitleUpdate(data);
+
               console.log(
                 "NEXA AI response completed."
               );
@@ -953,6 +1089,8 @@ function App() {
                         : message
                   )
               );
+
+              applyConversationTitleUpdate(data);
             }
           } catch (error) {
             console.warn(
@@ -1012,6 +1150,111 @@ function App() {
         conversation.id ===
         conversationId
     );
+
+  const conversationGroups = getConversationGroups(
+    conversations,
+    searchQuery
+  );
+
+  // ============================================================
+  // RENDER ONE CONVERSATION ITEM (shared by pinned + grouped)
+  // ============================================================
+
+  function renderConversationItem(conversation) {
+    return (
+      <div
+        key={conversation.id}
+        className={`conversation-item ${
+          conversation.id === conversationId
+            ? "active"
+            : ""
+        } ${
+          conversation.is_pinned ? "pinned-item" : ""
+        }`}
+      >
+        {editingConversationId === conversation.id ? (
+          <input
+            className="conversation-edit-input"
+            value={editingTitle}
+            onChange={(event) =>
+              setEditingTitle(event.target.value)
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                saveRename(conversation.id);
+              }
+
+              if (event.key === "Escape") {
+                setEditingConversationId(null);
+              }
+            }}
+            onBlur={() => saveRename(conversation.id)}
+            autoFocus
+          />
+        ) : (
+          <>
+            <button
+              className="conversation-main"
+              onClick={() =>
+                selectConversation(conversation.id)
+              }
+              type="button"
+            >
+              <span className="conversation-icon">◇</span>
+
+              <span className="conversation-title">
+                {conversation.title}
+              </span>
+            </button>
+
+            <div className="conversation-actions">
+              <button
+                type="button"
+                className={`conversation-action pin ${
+                  conversation.is_pinned ? "pinned" : ""
+                }`}
+                onClick={() =>
+                  togglePinConversation(conversation)
+                }
+                title={
+                  conversation.is_pinned ? "Unpin" : "Pin"
+                }
+                aria-label={
+                  conversation.is_pinned
+                    ? "Unpin conversation"
+                    : "Pin conversation"
+                }
+              >
+                📌
+              </button>
+
+              <button
+                type="button"
+                className="conversation-action"
+                onClick={() => startRename(conversation)}
+                title="Rename"
+                aria-label="Rename conversation"
+              >
+                ✎
+              </button>
+
+              <button
+                type="button"
+                className="conversation-action delete"
+                onClick={() =>
+                  deleteConversation(conversation.id)
+                }
+                title="Delete"
+                aria-label="Delete conversation"
+              >
+                ×
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
 
   // ============================================================
   // RENDER
@@ -1095,6 +1338,33 @@ function App() {
           </span>
         </button>
 
+        {/* SEARCH */}
+
+        <div className="sidebar-search">
+          <span className="sidebar-search-icon">⌕</span>
+
+          <input
+            type="text"
+            className="sidebar-search-input"
+            placeholder="Search conversations..."
+            value={searchQuery}
+            onChange={(event) =>
+              setSearchQuery(event.target.value)
+            }
+          />
+
+          {searchQuery && (
+            <button
+              type="button"
+              className="sidebar-search-clear"
+              onClick={() => setSearchQuery("")}
+              aria-label="Clear search"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
         {/* CONVERSATION TITLE */}
 
         <div className="conversation-heading">
@@ -1111,118 +1381,42 @@ function App() {
 
         <div className="conversation-list">
 
-          {conversations.length === 0 ? (
+          {conversationGroups.isEmpty ? (
             <div className="empty-conversations">
-              No conversations yet
+              {searchQuery
+                ? "No conversations match your search"
+                : "No conversations yet"}
             </div>
           ) : (
-            conversations.map(
-              (conversation) => (
-                <div
-                  key={conversation.id}
-                  className={`conversation-item ${
-                    conversation.id ===
-                    conversationId
-                      ? "active"
-                      : ""
-                  }`}
-                >
+            <>
+              {conversationGroups.pinned.length > 0 && (
+                <div className="conversation-section">
+                  <div className="conversation-section-label">
+                    Pinned
+                  </div>
 
-                  {editingConversationId ===
-                  conversation.id ? (
-                    <input
-                      className="conversation-edit-input"
-                      value={editingTitle}
-                      onChange={(event) =>
-                        setEditingTitle(
-                          event.target.value
-                        )
-                      }
-                      onKeyDown={(event) => {
-                        if (
-                          event.key ===
-                          "Enter"
-                        ) {
-                          saveRename(
-                            conversation.id
-                          );
-                        }
-
-                        if (
-                          event.key ===
-                          "Escape"
-                        ) {
-                          setEditingConversationId(
-                            null
-                          );
-                        }
-                      }}
-                      onBlur={() =>
-                        saveRename(
-                          conversation.id
-                        )
-                      }
-                      autoFocus
-                    />
-                  ) : (
-                    <>
-                      <button
-                        className="conversation-main"
-                        onClick={() =>
-                          selectConversation(
-                            conversation.id
-                          )
-                        }
-                        type="button"
-                      >
-
-                        <span className="conversation-icon">
-                          ◇
-                        </span>
-
-                        <span className="conversation-title">
-                          {conversation.title}
-                        </span>
-
-                      </button>
-
-                      <div className="conversation-actions">
-
-                        <button
-                          type="button"
-                          className="conversation-action"
-                          onClick={() =>
-                            startRename(
-                              conversation
-                            )
-                          }
-                          title="Rename"
-                          aria-label="Rename conversation"
-                        >
-                          ✎
-                        </button>
-
-                        <button
-                          type="button"
-                          className="conversation-action delete"
-                          onClick={() =>
-                            deleteConversation(
-                              conversation.id
-                            )
-                          }
-                          title="Delete"
-                          aria-label="Delete conversation"
-                        >
-                          ×
-                        </button>
-
-                      </div>
-                    </>
+                  {conversationGroups.pinned.map(
+                    (conversation) =>
+                      renderConversationItem(conversation)
                   )}
-
                 </div>
-              )
-            )
+              )}
+
+              {conversationGroups.sections.map((section) => (
+                <div
+                  key={section.key}
+                  className="conversation-section"
+                >
+                  <div className="conversation-section-label">
+                    {section.label}
+                  </div>
+
+                  {section.items.map((conversation) =>
+                    renderConversationItem(conversation)
+                  )}
+                </div>
+              ))}
+            </>
           )}
 
         </div>
