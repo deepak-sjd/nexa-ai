@@ -39,6 +39,9 @@ function App() {
 
   const [searchQuery, setSearchQuery] = useState("");
 
+  const [openMenuConversationId, setOpenMenuConversationId] =
+    useState(null);
+
   // ============================================================
   // REFS
   // ============================================================
@@ -59,6 +62,30 @@ function App() {
       block: "end",
     });
   }, [messages, loading]);
+
+  // ============================================================
+  // CLOSE CONVERSATION MENU ON OUTSIDE CLICK
+  // ============================================================
+
+  useEffect(() => {
+    if (!openMenuConversationId) {
+      return;
+    }
+
+    function handleClickOutside(event) {
+      if (!event.target.closest(".conversation-menu-wrapper")) {
+        setOpenMenuConversationId(null);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () =>
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutside
+      );
+  }, [openMenuConversationId]);
 
   // ============================================================
   // INITIALIZE APPLICATION
@@ -1207,48 +1234,79 @@ function App() {
               </span>
             </button>
 
-            <div className="conversation-actions">
+            <div className="conversation-menu-wrapper">
               <button
                 type="button"
-                className={`conversation-action pin ${
-                  conversation.is_pinned ? "pinned" : ""
-                }`}
-                onClick={() =>
-                  togglePinConversation(conversation)
-                }
-                title={
-                  conversation.is_pinned ? "Unpin" : "Pin"
-                }
-                aria-label={
-                  conversation.is_pinned
-                    ? "Unpin conversation"
-                    : "Pin conversation"
-                }
+                className="conversation-action menu-trigger"
+                onClick={(event) => {
+                  event.stopPropagation();
+
+                  setOpenMenuConversationId(
+                    openMenuConversationId ===
+                      conversation.id
+                      ? null
+                      : conversation.id
+                  );
+                }}
+                title="More options"
+                aria-label="More options"
               >
-                📌
+                ⋮
               </button>
 
-              <button
-                type="button"
-                className="conversation-action"
-                onClick={() => startRename(conversation)}
-                title="Rename"
-                aria-label="Rename conversation"
-              >
-                ✎
-              </button>
+              {openMenuConversationId ===
+                conversation.id && (
+                <div className="conversation-menu">
+                  <button
+                    type="button"
+                    className="conversation-menu-item"
+                    onClick={() => {
+                      togglePinConversation(conversation);
+                      setOpenMenuConversationId(null);
+                    }}
+                  >
+                    <span className="conversation-menu-icon">
+                      📌
+                    </span>
 
-              <button
-                type="button"
-                className="conversation-action delete"
-                onClick={() =>
-                  deleteConversation(conversation.id)
-                }
-                title="Delete"
-                aria-label="Delete conversation"
-              >
-                ×
-              </button>
+                    {conversation.is_pinned
+                      ? "Unpin"
+                      : "Pin"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="conversation-menu-item"
+                    onClick={() => {
+                      startRename(conversation);
+                      setOpenMenuConversationId(null);
+                    }}
+                  >
+                    <span className="conversation-menu-icon">
+                      ✎
+                    </span>
+
+                    Rename
+                  </button>
+
+                  <div className="conversation-menu-divider" />
+
+                  <button
+                    type="button"
+                    className="conversation-menu-item delete"
+                    onClick={() => {
+                      setOpenMenuConversationId(null);
+                      deleteConversation(conversation.id);
+                    }}
+                  >
+                    <span className="conversation-menu-icon">
+                      🗑
+                    </span>
+
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
           </>
         )}
