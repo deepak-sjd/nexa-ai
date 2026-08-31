@@ -3,8 +3,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.database import Base
-
+from app.core.database import Base, utc_now
 
 class Message(Base):
     __tablename__ = "messages"
@@ -32,6 +31,6 @@ class Message(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=datetime.utcnow,
+        default=utc_now,
         nullable=False,
     )
