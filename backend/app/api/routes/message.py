@@ -1,14 +1,20 @@
+import time
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from fastapi.responses import StreamingResponse
 import json
 
 from app.core.database import get_db
+from app.core.logging_config import get_logger
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.schemas.message import MessageCreate, MessageResponse
 from app.services.llm_service import llm_service
 from app.services.rag_service import rag_service
+
+
+logger = get_logger(__name__)
 
 
 router = APIRouter(
@@ -143,6 +149,8 @@ def create_message(
         for message in previous_messages
     ]
 
+    retrieval_started_at = time.perf_counter()
+
     rag_result = rag_service.search(
         query=data.content,
         retrieval_top_k=8,
@@ -150,6 +158,21 @@ def create_message(
     )
 
     retrieved_context = rag_result["context"]
+
+    retrieval_seconds = (
+        time.perf_counter() - retrieval_started_at
+    )
+
+    logger.info(
+        "conversation=%s retrieval_seconds=%.3f "
+        "retrieved_chunks=%d reranked_chunks=%d "
+        "context_chars=%d",
+        conversation_id,
+        retrieval_seconds,
+        len(rag_result.get("retrieved", [])),
+        len(rag_result.get("reranked", [])),
+        len(retrieved_context or ""),
+    )
 
     is_first_message = len(previous_messages) == 0
 
@@ -171,6 +194,8 @@ def create_message(
         db=db,
     )
 
+    generation_started_at = time.perf_counter()
+
     try:
         # 4. Send current message + previous history to Gemini
         ai_response = llm_service.generate_response(
@@ -180,12 +205,28 @@ def create_message(
         )
 
     except Exception as e:
-        print(f"AI service error: {e}")
+        logger.exception(
+            "conversation=%s AI service error: %s",
+            conversation_id,
+            e,
+        )
 
         raise HTTPException(
             status_code=503,
             detail="AI service is temporarily unavailable. Please try again.",
         )
+
+    generation_seconds = (
+        time.perf_counter() - generation_started_at
+    )
+
+    logger.info(
+        "conversation=%s total_generation_seconds=%.3f "
+        "response_chars=%d",
+        conversation_id,
+        generation_seconds,
+        len(ai_response or ""),
+    )
 
     # 5. Save assistant response
     assistant_message = Message(
@@ -255,12 +296,29 @@ def create_message_stream(
     # ========================================================
     # 3. RAG RETRIEVAL
     # ========================================================
+    retrieval_started_at = time.perf_counter()
+
     rag_result = rag_service.search(
         query=data.content,
         retrieval_top_k=8,
         rerank_top_k=5,
     )
     retrieved_context = rag_result["context"]
+
+    retrieval_seconds = (
+        time.perf_counter() - retrieval_started_at
+    )
+
+    logger.info(
+        "conversation=%s retrieval_seconds=%.3f "
+        "retrieved_chunks=%d reranked_chunks=%d "
+        "context_chars=%d",
+        conversation_id,
+        retrieval_seconds,
+        len(rag_result.get("retrieved", [])),
+        len(rag_result.get("reranked", [])),
+        len(retrieved_context or ""),
+    )
 
     is_first_message = len(previous_messages) == 0
 
@@ -293,6 +351,10 @@ def create_message_stream(
 
         full_response = ""
 
+        generation_started_at = time.perf_counter()
+        first_chunk_at = None
+        chunk_count = 0
+
         try:
 
             for chunk in llm_service.generate_response_stream(
@@ -301,6 +363,10 @@ def create_message_stream(
                 retrieved_context=retrieved_context,
             ):
 
+                if first_chunk_at is None:
+                    first_chunk_at = time.perf_counter()
+
+                chunk_count += 1
                 full_response += chunk
 
                 yield (
@@ -323,8 +389,36 @@ def create_message_stream(
             db.commit()
             db.refresh(assistant_message)
 
+            generation_finished_at = time.perf_counter()
+
+            time_to_first_chunk = (
+                (first_chunk_at - generation_started_at)
+                if first_chunk_at
+                else None
+            )
+
+            total_generation_seconds = (
+                generation_finished_at - generation_started_at
+            )
+
+            logger.info(
+                "conversation=%s "
+                "time_to_first_chunk_seconds=%s "
+                "total_generation_seconds=%.3f "
+                "chunk_count=%d response_chars=%d",
+                conversation_id,
+                (
+                    f"{time_to_first_chunk:.3f}"
+                    if time_to_first_chunk is not None
+                    else "n/a"
+                ),
+                total_generation_seconds,
+                chunk_count,
+                len(full_response),
+            )
+
             # =================================================
-            # 7. SEND COMPLETION EVENT
+            # 6. SEND COMPLETION EVENT
             # =================================================
 
             done_payload = {
@@ -352,11 +446,12 @@ def create_message_stream(
         except Exception as e:
 
             db.rollback()
-            print("=" * 70)
-            print("STREAMING ERROR")
-            print(type(e).__name__)
-            print(str(e))
-            print("=" * 70)
+
+            logger.exception(
+                "conversation=%s streaming error: %s",
+                conversation_id,
+                e,
+            )
 
             yield (
                 "data: "
