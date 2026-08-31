@@ -17,6 +17,62 @@ router = APIRouter(
 )
 
 
+DEFAULT_CONVERSATION_TITLE = "New Conversation"
+
+
+def generate_conversation_title(
+    text: str,
+    max_length: int = 48,
+) -> str:
+    """
+    Derive a short, human-readable conversation title from the
+    first user message. No LLM call — pure string truncation,
+    so it costs nothing and never fails.
+    """
+
+    cleaned = " ".join(text.strip().split())
+
+    if not cleaned:
+        return DEFAULT_CONVERSATION_TITLE
+
+    if len(cleaned) <= max_length:
+        return cleaned
+
+    truncated = cleaned[:max_length].rsplit(" ", 1)[0]
+
+    return f"{truncated}..."
+
+
+def maybe_autotitle_conversation(
+    conversation: Conversation,
+    is_first_message: bool,
+    first_message_content: str,
+    db: Session,
+) -> bool:
+    """
+    If this is the conversation's first message and it still has
+    the default placeholder title, rename it based on the
+    message content. Returns True if the title changed.
+    """
+
+    if not is_first_message:
+        return False
+
+    if conversation.title != DEFAULT_CONVERSATION_TITLE:
+        # User already renamed it manually — never override that.
+        return False
+
+    conversation.title = generate_conversation_title(
+        first_message_content
+    )
+
+    db.add(conversation)
+    db.commit()
+    db.refresh(conversation)
+
+    return True
+
+
 @router.get(
     "/{conversation_id}/messages",
     response_model=list[MessageResponse],
@@ -95,6 +151,8 @@ def create_message(
 
     retrieved_context = rag_result["context"]
 
+    is_first_message = len(previous_messages) == 0
+
     # 3. Save user's message
     user_message = Message(
         conversation_id=conversation_id,
@@ -106,21 +164,28 @@ def create_message(
     db.commit()
     db.refresh(user_message)
 
-    try:
-    # 4. Send current message + previous history to Gemini
-       ai_response = llm_service.generate_response(
-          user_message=data.content,
-          conversation_history=conversation_history,
-          retrieved_context= retrieved_context,
+    maybe_autotitle_conversation(
+        conversation=conversation,
+        is_first_message=is_first_message,
+        first_message_content=data.content,
+        db=db,
     )
+
+    try:
+        # 4. Send current message + previous history to Gemini
+        ai_response = llm_service.generate_response(
+            user_message=data.content,
+            conversation_history=conversation_history,
+            retrieved_context=retrieved_context,
+        )
 
     except Exception as e:
         print(f"AI service error: {e}")
 
         raise HTTPException(
-           status_code=503,
-           detail="AI service is temporarily unavailable. Please try again.",
-    )
+            status_code=503,
+            detail="AI service is temporarily unavailable. Please try again.",
+        )
 
     # 5. Save assistant response
     assistant_message = Message(
@@ -135,6 +200,7 @@ def create_message(
 
     # 6. Return both messages
     return [assistant_message]
+
 
 @router.post(
     "/{conversation_id}/messages/stream",
@@ -179,23 +245,25 @@ def create_message_stream(
     previous_messages.reverse()
 
     conversation_history = [
-    {
-        "role": message.role,
-        "content": message.content,
-    }
-    for message in previous_messages
-]
-
+        {
+            "role": message.role,
+            "content": message.content,
+        }
+        for message in previous_messages
+    ]
 
     # ========================================================
     # 3. RAG RETRIEVAL
     # ========================================================
     rag_result = rag_service.search(
-       query=data.content,
-       retrieval_top_k=8,
-       rerank_top_k=5,
-)
+        query=data.content,
+        retrieval_top_k=8,
+        rerank_top_k=5,
+    )
     retrieved_context = rag_result["context"]
+
+    is_first_message = len(previous_messages) == 0
+
     # ========================================================
     # 4. SAVE USER MESSAGE
     # ========================================================
@@ -209,6 +277,13 @@ def create_message_stream(
     db.add(user_message)
     db.commit()
     db.refresh(user_message)
+
+    title_changed = maybe_autotitle_conversation(
+        conversation=conversation,
+        is_first_message=is_first_message,
+        first_message_content=data.content,
+        db=db,
+    )
 
     # ========================================================
     # 5. STREAM GEMINI RESPONSE
@@ -249,22 +324,28 @@ def create_message_stream(
             db.refresh(assistant_message)
 
             # =================================================
-            # 6. SEND COMPLETION EVENT
+            # 7. SEND COMPLETION EVENT
             # =================================================
+
+            done_payload = {
+                "type": "done",
+                "message": {
+                    "id": assistant_message.id,
+                    "conversation_id": conversation_id,
+                    "role": "assistant",
+                    "content": full_response,
+                },
+            }
+
+            if title_changed:
+                done_payload["conversation"] = {
+                    "id": conversation.id,
+                    "title": conversation.title,
+                }
 
             yield (
                 "data: "
-                + json.dumps(
-                    {
-                        "type": "done",
-                        "message": {
-                            "id": assistant_message.id,
-                            "conversation_id": conversation_id,
-                            "role": "assistant",
-                            "content": full_response,
-                        },
-                    }
-                )
+                + json.dumps(done_payload)
                 + "\n\n"
             )
 
@@ -275,7 +356,7 @@ def create_message_stream(
             print("STREAMING ERROR")
             print(type(e).__name__)
             print(str(e))
-            print("=" *70)
+            print("=" * 70)
 
             yield (
                 "data: "

@@ -451,7 +451,7 @@ function App() {
   async function deleteConversation(
     conversationIdToDelete
   ) {
-    if (loading) {
+    if (loading && conversationIdToDelete === conversationId) {
       return;
     }
 
@@ -512,6 +512,32 @@ function App() {
         error
       );
     }
+  }
+
+
+
+    // ============================================================
+  // APPLY AUTO-GENERATED TITLE (from SSE "done" event)
+  // ============================================================
+
+  function applyConversationTitleUpdate(data) {
+    if (!data || !data.conversation) {
+      return;
+    }
+
+    const { id, title } = data.conversation;
+
+    if (!id || !title) {
+      return;
+    }
+
+    setConversations((previous) =>
+      previous.map((conversation) =>
+        conversation.id === id
+          ? { ...conversation, title }
+          : conversation
+      )
+    );
   }
 
   // ============================================================
