@@ -41,6 +41,10 @@ def generate_conversation_title(
     if not cleaned:
         return DEFAULT_CONVERSATION_TITLE
 
+    # Capitalize only the first character — leave the rest of
+    # the casing untouched (don't mangle acronyms like "RAG").
+    cleaned = cleaned[0].upper() + cleaned[1:]
+
     if len(cleaned) <= max_length:
         return cleaned
 

@@ -7,6 +7,67 @@ const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
 
 const USER_ID = 1;
 
+// ============================================================
+// SMALL OUTLINE ICONS (no icon library — plain inline SVG)
+// ============================================================
+
+function PinIcon({ filled = false }) {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 17v5" />
+      <path d="M9 3h6l1 6 3 3v2H5v-2l3-3z" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  );
+}
+
 function App() {
   // ============================================================
   // STATE
@@ -1227,7 +1288,7 @@ function App() {
               }
               type="button"
             >
-              <span className="conversation-icon">◇</span>
+              <span className="conversation-icon">○</span>
 
               <span className="conversation-title">
                 {conversation.title}
@@ -1266,12 +1327,16 @@ function App() {
                     }}
                   >
                     <span className="conversation-menu-icon">
-                      📌
+                      <PinIcon filled={conversation.is_pinned} />
                     </span>
 
                     {conversation.is_pinned
                       ? "Unpin"
                       : "Pin"}
+
+                    <span className="conversation-menu-shortcut">
+                      P
+                    </span>
                   </button>
 
                   <button
@@ -1283,10 +1348,14 @@ function App() {
                     }}
                   >
                     <span className="conversation-menu-icon">
-                      ✎
+                      <PencilIcon />
                     </span>
 
                     Rename
+
+                    <span className="conversation-menu-shortcut">
+                      R
+                    </span>
                   </button>
 
                   <div className="conversation-menu-divider" />
@@ -1300,10 +1369,14 @@ function App() {
                     }}
                   >
                     <span className="conversation-menu-icon">
-                      🗑
+                      <TrashIcon />
                     </span>
 
                     Delete
+
+                    <span className="conversation-menu-shortcut">
+                      D
+                    </span>
                   </button>
                 </div>
               )}
