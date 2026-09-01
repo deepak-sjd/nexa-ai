@@ -1,7 +1,12 @@
-
 from pathlib import Path
+import csv
+import io
 import re
 from typing import Any
+
+from pypdf import PdfReader
+from docx import Document as DocxDocument
+from openpyxl import load_workbook
 
 
 class DocumentProcessor:
@@ -15,8 +20,12 @@ class DocumentProcessor:
         Python:
             Split primarily around classes/functions/methods.
 
-        Text:
-            Split by paragraphs.
+        PDF / Word / plain text:
+            Split by paragraphs (PDF pages become paragraph
+            boundaries).
+
+        CSV / Excel:
+            Each row becomes a small readable text block.
 
     Large sections are split only when necessary.
     """
@@ -25,6 +34,17 @@ class DocumentProcessor:
         ".txt",
         ".md",
         ".py",
+        ".pdf",
+        ".docx",
+        ".csv",
+        ".xlsx",
+    }
+
+    STRUCTURED_EXTENSIONS = {
+        ".pdf",
+        ".docx",
+        ".csv",
+        ".xlsx",
     }
 
     def __init__(
@@ -61,18 +81,23 @@ class DocumentProcessor:
                 f"Document not found: {file_path}"
             )
 
-        if path.suffix.lower() not in self.SUPPORTED_EXTENSIONS:
+        extension = path.suffix.lower()
+
+        if extension not in self.SUPPORTED_EXTENSIONS:
             return []
 
-        text = path.read_text(
-            encoding="utf-8",
-            errors="ignore",
-        ).strip()
+        if extension in self.STRUCTURED_EXTENSIONS:
+            text = self._extract_structured_text(
+                path, extension
+            )
+        else:
+            text = path.read_text(
+                encoding="utf-8",
+                errors="ignore",
+            ).strip()
 
         if not text:
             return []
-
-        extension = path.suffix.lower()
 
         if extension == ".md":
             sections = self._split_markdown(text)
@@ -81,6 +106,8 @@ class DocumentProcessor:
             sections = self._split_python(text)
 
         else:
+            # .txt, .pdf, .docx, .csv, .xlsx all end up as
+            # paragraph-separated plain text by this point.
             sections = self._split_text(text)
 
         chunks = []
@@ -100,6 +127,141 @@ class DocumentProcessor:
                 )
 
         return chunks
+
+    # ============================================================
+    # BINARY FORMAT TEXT EXTRACTION
+    # ============================================================
+
+    def _extract_structured_text(
+        self,
+        path: Path,
+        extension: str,
+    ) -> str:
+
+        if extension == ".pdf":
+            return self._extract_pdf_text(path)
+
+        if extension == ".docx":
+            return self._extract_docx_text(path)
+
+        if extension == ".xlsx":
+            return self._extract_xlsx_text(path)
+
+        if extension == ".csv":
+            return self._extract_csv_text(path)
+
+        return ""
+
+    def _extract_pdf_text(self, path: Path) -> str:
+
+        reader = PdfReader(str(path))
+
+        pages = []
+
+        for page in reader.pages:
+
+            page_text = (page.extract_text() or "").strip()
+
+            if page_text:
+                pages.append(page_text)
+
+        # Blank line between pages so paragraph-splitting
+        # treats each page as its own section boundary.
+        return "\n\n".join(pages).strip()
+
+    def _extract_docx_text(self, path: Path) -> str:
+
+        document = DocxDocument(str(path))
+
+        paragraphs = [
+            paragraph.text.strip()
+            for paragraph in document.paragraphs
+            if paragraph.text.strip()
+        ]
+
+        # Tables aren't in .paragraphs — pull their text too.
+        for table in document.tables:
+            for row in table.rows:
+
+                cells = [
+                    cell.text.strip()
+                    for cell in row.cells
+                    if cell.text.strip()
+                ]
+
+                if cells:
+                    paragraphs.append(" | ".join(cells))
+
+        return "\n\n".join(paragraphs).strip()
+
+    def _extract_xlsx_text(self, path: Path) -> str:
+
+        workbook = load_workbook(
+            str(path),
+            read_only=True,
+            data_only=True,
+        )
+
+        blocks = []
+
+        for sheet in workbook.worksheets:
+
+            header = None
+
+            for row in sheet.iter_rows(values_only=True):
+
+                values = [
+                    str(cell) for cell in row if cell is not None
+                ]
+
+                if not values:
+                    continue
+
+                if header is None:
+                    header = values
+                    continue
+
+                pairs = [
+                    f"{key}: {value}"
+                    for key, value in zip(header, values)
+                ]
+
+                if pairs:
+                    blocks.append(
+                        f"[{sheet.title}] "
+                        + ", ".join(pairs)
+                    )
+
+        return "\n\n".join(blocks).strip()
+
+    def _extract_csv_text(self, path: Path) -> str:
+
+        with open(
+            path, "r", encoding="utf-8", errors="ignore"
+        ) as csv_file:
+
+            reader = csv.reader(csv_file)
+            rows = list(reader)
+
+        if not rows:
+            return ""
+
+        header = rows[0]
+
+        blocks = []
+
+        for row in rows[1:]:
+
+            pairs = [
+                f"{key}: {value}"
+                for key, value in zip(header, row)
+                if value
+            ]
+
+            if pairs:
+                blocks.append(", ".join(pairs))
+
+        return "\n\n".join(blocks).strip()
 
     # ============================================================
     # MARKDOWN CHUNKING
