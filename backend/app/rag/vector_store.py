@@ -166,6 +166,139 @@ class VectorStore:
         self._save()
 
     # ============================================================
+    # GET STORED VECTOR (NO RECOMPUTATION)
+    # ============================================================
+
+    def get_vector(self, vector_id: int) -> list[float]:
+        """
+        Return the already-stored (normalized) vector for a given
+        vector_id, read directly from FAISS.
+
+        Used by incremental indexing to reuse embeddings for
+        unchanged documents without calling the embedding API again.
+        """
+
+        if self.index is None:
+            raise RuntimeError(
+                "Vector store is empty; no vectors to reconstruct."
+            )
+
+        return self.index.reconstruct(int(vector_id)).tolist()
+
+    # ============================================================
+    # EMBED WITHOUT INDEXING
+    # ============================================================
+
+    def embed_and_normalize(
+        self,
+        chunks: list[str],
+    ) -> list[list[float]]:
+        """
+        Embed chunks via the embedding API and L2-normalize them,
+        WITHOUT adding them to the index yet.
+
+        This lets callers (e.g. incremental indexing) collect
+        vectors for multiple documents and add them all at once
+        via `rebuild()`.
+        """
+
+        if not chunks:
+            return []
+
+        embeddings = embedding_service.embed_documents(chunks)
+
+        if not embeddings:
+            return []
+
+        vectors = np.asarray(
+            embeddings,
+            dtype="float32",
+        )
+
+        faiss.normalize_L2(vectors)
+
+        return vectors.tolist()
+
+    # ============================================================
+    # REBUILD FROM (VECTOR, METADATA) PAIRS
+    # ============================================================
+
+    def rebuild(
+        self,
+        entries: list[tuple[list[float], dict[str, Any]]],
+    ):
+        """
+        Rebuild the entire index from a list of
+        (vector, metadata) pairs.
+
+        Vectors are assumed to already be L2-normalized (either
+        reused from `get_vector()` or produced by
+        `embed_and_normalize()`), so this performs NO embedding
+        API calls itself.
+        """
+
+        self.index = None
+        self.metadata = []
+
+        if not entries:
+            self._save()
+            return
+
+        vectors = np.asarray(
+            [vector for vector, _ in entries],
+            dtype="float32",
+        )
+
+        dimension = vectors.shape[1]
+
+        self.index = faiss.IndexFlatIP(dimension)
+        self.index.add(vectors)
+
+        for vector_id, (_, metadata) in enumerate(entries):
+
+            entry = dict(metadata)
+            entry["vector_id"] = vector_id
+
+            self.metadata.append(entry)
+
+        self._save()
+
+    # ============================================================
+    # REMOVE ONE DOCUMENT'S CHUNKS
+    # ============================================================
+
+    def remove_document(self, document_id: str) -> int:
+        """
+        Remove all chunks belonging to a given document_id and
+        rebuild the index from the remaining vectors.
+
+        Returns the number of chunks removed. No embedding API
+        calls are made — remaining vectors are reused as-is.
+        """
+
+        if self.index is None:
+            return 0
+
+        kept_entries: list[tuple[list[float], dict[str, Any]]] = []
+        removed_count = 0
+
+        for entry in self.metadata:
+
+            if entry.get("document_id") == document_id:
+                removed_count += 1
+                continue
+
+            vector = self.get_vector(entry["vector_id"])
+            kept_entries.append((vector, entry))
+
+        if removed_count == 0:
+            return 0
+
+        self.rebuild(kept_entries)
+
+        return removed_count
+
+    # ============================================================
     # SEARCH
     # ============================================================
 
