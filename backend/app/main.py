@@ -3,8 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.logging_config import configure_logging
-from app.api.routes import users, conversations, message
 
+from app.api.routes import (
+    users,
+    conversations,
+    message,
+    documents,
+)
 
 configure_logging(debug=settings.debug)
 
@@ -47,6 +52,11 @@ app.include_router(
 
 app.include_router(
     message.router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    documents.router,
     prefix="/api/v1",
 )
 

@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     gemini_api_key: str
     gemini_model: str = "gemini-2.5-flash"
 
+    upload_dir: str = "data/uploads"
+    max_upload_size_mb: int = 20
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",
