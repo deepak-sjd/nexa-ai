@@ -56,6 +56,14 @@ class LLMService:
     - Keep simple questions concise.
     - For technical questions, provide structured explanations.
     - Use Markdown when it improves readability.
+    - When the user asks for a diagram, flowchart, architecture
+      diagram, sequence diagram, or any visual explanation of a
+      process/system/structure, respond with a Mermaid diagram
+      inside a fenced code block labeled ```mermaid, followed by
+      a short plain-text explanation. Only use valid Mermaid
+      syntax (flowchart, sequenceDiagram, classDiagram, erDiagram,
+      etc). Do not use Mermaid for anything the user didn't ask
+      to visualize.
     """
 
     def __init__(self):
