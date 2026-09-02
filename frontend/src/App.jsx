@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import mermaid from "mermaid";
 import "./App.css";
 
 const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
@@ -68,6 +69,135 @@ function TrashIcon() {
   );
 }
 
+function FileIcon() {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+    </svg>
+  );
+}
+
+function UploadCloudIcon() {
+  return (
+    <svg
+      width="28"
+      height="28"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4 14.9A5 5 0 0 1 6 5.3a6 6 0 0 1 11.7-1.6A5.5 5.5 0 0 1 20 14" />
+      <path d="M12 12v9" />
+      <path d="m8 16 4-4 4 4" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </svg>
+  );
+}
+
+// ============================================================
+// MERMAID DIAGRAM RENDERING
+// ============================================================
+
+mermaid.initialize({
+  startOnLoad: false,
+  theme: "dark",
+  securityLevel: "strict",
+  fontFamily: "inherit",
+});
+
+let mermaidDiagramCounter = 0;
+
+function MermaidDiagram({ code }) {
+  const [svg, setSvg] = useState("");
+  const [error, setError] = useState(null);
+
+  const idRef = useRef(null);
+
+  if (idRef.current === null) {
+    mermaidDiagramCounter += 1;
+    idRef.current = `nexa-mermaid-${mermaidDiagramCounter}`;
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function renderDiagram() {
+      try {
+        const { svg: renderedSvg } = await mermaid.render(
+          idRef.current,
+          code
+        );
+
+        if (!cancelled) {
+          setSvg(renderedSvg);
+          setError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err?.message || "Could not render this diagram."
+          );
+        }
+      }
+    }
+
+    renderDiagram();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [code]);
+
+  if (error) {
+    return (
+      <div className="mermaid-error">
+        <p>Couldn't render this diagram.</p>
+
+        <pre className="code-block">
+          <code>{code}</code>
+        </pre>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="mermaid-diagram"
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+}
+
 function App() {
   // ============================================================
   // STATE
@@ -103,11 +233,27 @@ function App() {
   const [openMenuConversationId, setOpenMenuConversationId] =
     useState(null);
 
+  const [documentsModalOpen, setDocumentsModalOpen] =
+    useState(false);
+
+  const [documents, setDocuments] = useState([]);
+
+  const [documentsLoading, setDocumentsLoading] =
+    useState(false);
+
+  const [isUploading, setIsUploading] = useState(false);
+
+  const [uploadError, setUploadError] = useState("");
+
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+
   // ============================================================
   // REFS
   // ============================================================
 
   const messagesEndRef = useRef(null);
+
+  const fileInputRef = useRef(null);
 
   const textareaRef = useRef(null);
 
@@ -160,6 +306,7 @@ function App() {
     conversationCreatedRef.current = true;
 
     initializeChat();
+    loadDocuments();
   }, []);
 
   // ============================================================
@@ -601,6 +748,161 @@ function App() {
         "Delete conversation error:",
         error
       );
+    }
+  }
+
+  // ============================================================
+  // DOCUMENTS: LOAD LIST
+  // ============================================================
+
+  async function loadDocuments() {
+    setDocumentsLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/documents/user/${USER_ID}`,
+        {
+          method: "GET",
+          headers: { Accept: "application/json" },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Could not load documents");
+      }
+
+      const data = await response.json();
+
+      setDocuments(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Load documents error:", error);
+    } finally {
+      setDocumentsLoading(false);
+    }
+  }
+
+  // ============================================================
+  // DOCUMENTS: OPEN MODAL
+  // ============================================================
+
+  function openDocumentsModal() {
+    setDocumentsModalOpen(true);
+    setUploadError("");
+
+    loadDocuments();
+  }
+
+  // ============================================================
+  // DOCUMENTS: UPLOAD
+  // ============================================================
+
+  async function uploadDocumentFile(file) {
+    if (!file) {
+      return;
+    }
+
+    setUploadError("");
+    setIsUploading(true);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/documents/upload?user_id=${USER_ID}`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail || "Upload failed. Please try again."
+        );
+      }
+
+      setDocuments((previous) => [data, ...previous]);
+
+      if (data.status === "failed") {
+        setUploadError(
+          data.error_message ||
+            "This file could not be processed."
+        );
+      }
+    } catch (error) {
+      console.error("Upload document error:", error);
+
+      setUploadError(
+        error.message || "Upload failed. Please try again."
+      );
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  function handleFileInputChange(event) {
+    const file = event.target.files?.[0];
+
+    uploadDocumentFile(file);
+
+    event.target.value = "";
+  }
+
+  function handleDrop(event) {
+    event.preventDefault();
+    setIsDraggingFile(false);
+
+    const file = event.dataTransfer.files?.[0];
+
+    uploadDocumentFile(file);
+  }
+
+  function handleDragOver(event) {
+    event.preventDefault();
+    setIsDraggingFile(true);
+  }
+
+  function handleDragLeave(event) {
+    event.preventDefault();
+    setIsDraggingFile(false);
+  }
+
+  // ============================================================
+  // DOCUMENTS: DELETE
+  // ============================================================
+
+  async function deleteDocument(documentRowId) {
+    const confirmed = window.confirm(
+      "Delete this document? It will be removed from NEXA AI's knowledge base."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/documents/${documentRowId}`,
+        {
+          method: "DELETE",
+          headers: { Accept: "application/json" },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Could not delete document");
+      }
+
+      setDocuments((previous) =>
+        previous.filter(
+          (document) => document.id !== documentRowId
+        )
+      );
+    } catch (error) {
+      console.error("Delete document error:", error);
     }
   }
 
@@ -1469,6 +1771,24 @@ function App() {
           </span>
         </button>
 
+        {/* DOCUMENTS */}
+
+        <button
+          className="documents-button"
+          onClick={openDocumentsModal}
+          type="button"
+        >
+          <FileIcon />
+
+          <span>Documents</span>
+
+          {documents.length > 0 && (
+            <span className="documents-button-count">
+              {documents.length}
+            </span>
+          )}
+        </button>
+
         {/* SEARCH */}
 
         <div className="sidebar-search">
@@ -1716,10 +2036,41 @@ function App() {
 
                                   code: ({
                                     inline,
+                                    className,
                                     children,
                                     ...props
-                                  }) =>
-                                    inline ? (
+                                  }) => {
+                                    const isMermaid =
+                                      !inline &&
+                                      className ===
+                                        "language-mermaid";
+
+                                    if (isMermaid) {
+                                      const diagramCode = String(
+                                        children
+                                      ).replace(/\n$/, "");
+
+                                      if (isStreaming) {
+                                        // Wait for the full
+                                        // diagram before
+                                        // attempting to render
+                                        // — partial Mermaid
+                                        // syntax always fails.
+                                        return (
+                                          <div className="mermaid-pending">
+                                            Preparing diagram...
+                                          </div>
+                                        );
+                                      }
+
+                                      return (
+                                        <MermaidDiagram
+                                          code={diagramCode}
+                                        />
+                                      );
+                                    }
+
+                                    return inline ? (
                                       <code
                                         className="inline-code"
                                         {...props}
@@ -1729,12 +2080,14 @@ function App() {
                                     ) : (
                                       <pre className="code-block">
                                         <code
+                                          className={className}
                                           {...props}
                                         >
                                           {children}
                                         </code>
                                       </pre>
-                                    ),
+                                    );
+                                  },
                                 }}
                               >
                                 {message.content}
@@ -1858,6 +2211,139 @@ function App() {
         </footer>
 
       </div>
+
+      {/* ======================================================
+          DOCUMENTS MODAL
+      ====================================================== */}
+
+      {documentsModalOpen && (
+        <div
+          className="documents-modal-overlay"
+          onClick={() => setDocumentsModalOpen(false)}
+        >
+          <div
+            className="documents-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="documents-modal-header">
+              <div>
+                <h2>Documents</h2>
+                <p>
+                  Upload files to add them to NEXA AI's
+                  knowledge base
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="documents-modal-close"
+                onClick={() => setDocumentsModalOpen(false)}
+                aria-label="Close"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            <div
+              className={`documents-dropzone ${
+                isDraggingFile ? "dragging" : ""
+              } ${isUploading ? "uploading" : ""}`}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onClick={() =>
+                !isUploading && fileInputRef.current?.click()
+              }
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.txt,.md,.csv,.xlsx"
+                onChange={handleFileInputChange}
+                style={{ display: "none" }}
+              />
+
+              <UploadCloudIcon />
+
+              <p className="documents-dropzone-title">
+                {isUploading
+                  ? "Uploading..."
+                  : "Click to upload or drag a file here"}
+              </p>
+
+              <p className="documents-dropzone-hint">
+                PDF, Word, TXT, Markdown, CSV, Excel — up to
+                20MB
+              </p>
+            </div>
+
+            {uploadError && (
+              <div className="documents-upload-error">
+                {uploadError}
+              </div>
+            )}
+
+            <div className="documents-list">
+              {documentsLoading ? (
+                <div className="documents-empty">
+                  Loading documents...
+                </div>
+              ) : documents.length === 0 ? (
+                <div className="documents-empty">
+                  No documents uploaded yet
+                </div>
+              ) : (
+                documents.map((document) => (
+                  <div
+                    key={document.id}
+                    className="document-row"
+                  >
+                    <div className="document-row-icon">
+                      <FileIcon />
+                    </div>
+
+                    <div className="document-row-info">
+                      <span className="document-row-name">
+                        {document.filename}
+                      </span>
+
+                      <span className="document-row-meta">
+                        {document.file_type.toUpperCase()}
+                        {" · "}
+                        {document.status === "completed" &&
+                          `${document.chunk_count} chunks indexed`}
+                        {document.status === "processing" &&
+                          "Processing..."}
+                        {document.status === "failed" &&
+                          (document.error_message ||
+                            "Failed to process")}
+                      </span>
+                    </div>
+
+                    <span
+                      className={`document-status-badge ${document.status}`}
+                    >
+                      {document.status}
+                    </span>
+
+                    <button
+                      type="button"
+                      className="document-row-delete"
+                      onClick={() =>
+                        deleteDocument(document.id)
+                      }
+                      aria-label="Delete document"
+                      title="Delete"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
