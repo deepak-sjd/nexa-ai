@@ -132,7 +132,19 @@ mermaid.initialize({
   startOnLoad: false,
   theme: "dark",
   securityLevel: "strict",
-  fontFamily: "inherit",
+  fontFamily:
+    "-apple-system, BlinkMacSystemFont, 'Segoe UI', " +
+    "Roboto, Helvetica, Arial, sans-serif",
+  flowchart: {
+    htmlLabels: false,
+    useMaxWidth: false,
+  },
+  sequence: {
+    useMaxWidth: false,
+  },
+  class: {
+    useMaxWidth: false,
+  },
 });
 
 let mermaidDiagramCounter = 0;

@@ -1948,6 +1948,7 @@ textarea {
   justify-content: center;
 
   width: 100%;
+  min-width: 0;
 
   margin: 14px 0 4px;
   padding: 18px 14px;
@@ -1962,7 +1963,8 @@ textarea {
 }
 
 .mermaid-diagram svg {
-  max-width: 100%;
+  flex: 0 0 auto;
+
   height: auto;
 }
 
