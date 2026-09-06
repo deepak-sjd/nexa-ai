@@ -366,11 +366,60 @@ class DocumentProcessor:
             text,
         )
 
-        return [
+        paragraphs = [
             paragraph.strip()
             for paragraph in paragraphs
             if paragraph.strip()
         ]
+
+        return self._merge_paragraphs_into_chunks(paragraphs)
+
+    def _merge_paragraphs_into_chunks(
+        self,
+        paragraphs: list[str],
+    ) -> list[str]:
+        """
+        Group consecutive small paragraphs together up to
+        ~max_chunk_characters, instead of emitting one chunk
+        per paragraph regardless of size.
+
+        Without this, a document with many short lines (e.g.
+        a bullet-point reference sheet exported from Word)
+        produces hundreds of tiny chunks — each one costs a
+        separate embedding API call and gives the retriever
+        far less context per chunk. A paragraph that's
+        already larger than max_chunk_characters is kept
+        as-is; _split_large_section() handles it downstream.
+        """
+
+        chunks: list[str] = []
+        buffer = ""
+
+        for paragraph in paragraphs:
+
+            candidate = (
+                f"{buffer}\n\n{paragraph}"
+                if buffer
+                else paragraph
+            )
+
+            if len(candidate) <= self.max_chunk_characters:
+                buffer = candidate
+                continue
+
+            if buffer:
+                chunks.append(buffer)
+
+            if len(paragraph) <= self.max_chunk_characters:
+                buffer = paragraph
+            else:
+                chunks.append(paragraph)
+                buffer = ""
+
+        if buffer:
+            chunks.append(buffer)
+
+        return chunks
 
     # ============================================================
     # LARGE SECTION SPLITTING

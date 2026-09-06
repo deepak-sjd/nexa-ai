@@ -19,6 +19,11 @@ logger = get_logger(__name__)
 # per the project's own rule: never retry indefinitely.
 EMBED_BATCH_SIZE = 20
 
+# Never wait longer than this for a single retry, even if the
+# provider asks for more — this endpoint is synchronous and a
+# caller shouldn't be blocked for minutes.
+MAX_RETRY_WAIT_SECONDS = 45
+
 
 class EmbeddingQuotaExceededError(RuntimeError):
     """
@@ -44,6 +49,82 @@ def _is_retryable(exception: BaseException) -> bool:
         return True
 
     return False
+
+
+def _extract_retry_delay_seconds(
+    exception: BaseException,
+) -> float | None:
+    """
+    Gemini's 429 responses include the server's own suggested
+    wait time (e.g. "Please retry in 39s"), structured as a
+    RetryInfo detail. Respecting this — instead of a generic
+    fixed backoff — is far more likely to actually succeed on
+    retry, since our own backoff schedule has no relationship
+    to when the provider's rate-limit window actually resets.
+    """
+
+    if not isinstance(exception, genai_errors.ClientError):
+        return None
+
+    try:
+        details = (
+            exception.details.get("error", {}).get("details", [])
+        )
+    except AttributeError:
+        return None
+
+    for detail in details:
+        type_name = detail.get("@type", "")
+
+        if not type_name.endswith("RetryInfo"):
+            continue
+
+        delay_text = detail.get("retryDelay", "")
+
+        if delay_text.endswith("s"):
+            try:
+                return float(delay_text[:-1])
+            except ValueError:
+                return None
+
+    return None
+
+
+def _wait_for_gemini_or_backoff(retry_state):
+    """
+    Tenacity wait strategy: use the provider's own suggested
+    retryDelay when available (capped at MAX_RETRY_WAIT_SECONDS),
+    falling back to exponential backoff otherwise.
+    """
+
+    exception = retry_state.outcome.exception()
+
+    suggested_delay = (
+        _extract_retry_delay_seconds(exception)
+        if exception
+        else None
+    )
+
+    if suggested_delay is not None:
+        capped_delay = min(
+            suggested_delay,
+            MAX_RETRY_WAIT_SECONDS,
+        )
+
+        logger.info(
+            "Waiting %.0fs before retry, as suggested by "
+            "the embedding API (capped at %ds).",
+            capped_delay,
+            MAX_RETRY_WAIT_SECONDS,
+        )
+
+        return capped_delay
+
+    # Fall back to standard exponential backoff for errors
+    # that don't carry a suggested delay (e.g. ServerError).
+    fallback = wait_exponential(multiplier=2, min=2, max=20)
+
+    return fallback(retry_state)
 
 
 class EmbeddingService:
@@ -74,8 +155,8 @@ class EmbeddingService:
 
     @retry(
         retry=retry_if_exception(_is_retryable),
-        wait=wait_exponential(multiplier=2, min=2, max=20),
-        stop=stop_after_attempt(3),
+        wait=_wait_for_gemini_or_backoff,
+        stop=stop_after_attempt(2),
         reraise=True,
     )
     def _embed_batch(
