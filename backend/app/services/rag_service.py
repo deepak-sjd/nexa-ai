@@ -87,6 +87,7 @@ class RAGService:
         return self.reranker.rerank(
             query=query,
             results=results,
+            top_k=top_k,
         )
 
     # ============================================================

@@ -726,5 +726,54 @@
     "source": "Git_notes_daily_use.docx",
     "chunk_index": 1,
     "content": "git tag -a v1.0.0 -m \"msg\" | Create an annotated tag with a message (recommended for releases).\n\ngit push origin v1.0.0 | Push a single tag up to the remote repository.\n\ngit push origin --tags | Push every local tag to the remote at once.\n\nCommand | What it does\n\ngit remote add upstream <url> | Link the original repo you forked from as 'upstream'.\n\ngit fetch upstream | Download the latest changes from the original project.\n\ngit merge upstream/main | Bring upstream's latest 'main' into your local branch.\n\nPrefix | Use it for | Example\n\nfeat | A new feature or capability | feat: add PDF document upload\n\nfix | A bug fix | fix: handle Gemini API errors\n\ndocs | Documentation only changes | docs: update project documentation\n\nstyle | Formatting, no logic change | style: fix indentation in App.js\n\nrefactor | Code change, no new feature/fix | refactor: simplify chat handler logic\n\ntest | Adding or fixing tests | test: add unit tests for RAG retriever\n\nchore | Maintenance / tooling / setup | chore: initialize NexaAI project\n\nperf | A performance improvement | perf: speed up embedding lookup\n\nCommand | What it does\n\nchore: initialize NexaAI project | First commit — project scaffold created.\n\nfeat: add initial frontend and improve backend | Base UI and backend wired up.\n\nfeat: add chat interface | Chat UI component added.\n\nfeat: connect frontend to backend | Frontend now talks to the API.\n\nfix: handle empty messages | Bug fix for a blank-message edge case.\n\nfeat: add PDF upload | Users can upload PDF documents.\n\nfeat: implement RAG retrieval | Retrieval-augmented generation added for PDFs.\n\ndocs: update README | Documentation brought up to date.\n\nCommand | What it does\n\nupdate / changes / final / final2 / working / new changes | ✗ Vague, uninformative — avoid these entirely.\n\nfeat: add PDF document upload | ✓ Clear, specific, tells reviewers exactly what changed.\n\nfix: handle Gemini API errors | ✓ Explains the bug fixed and where.\n\ngit status   →  see what changed\ngit add .        →  stage everything\ngit commit -m \"feat: ...\"  →  snapshot with a clear message\ngit push          →  upload to GitHub\n\nCommand | What it does\n\n\"failed to push some refs\" | Remote has newer commits — run \"git pull\" first, then push again.\n\n\"fatal: not a git repository\" | You're outside the project folder, or forgot \"git init\".\n\nMerge conflict markers <<<< ==== >>>> | Edit the file to keep the correct lines, then \"git add\" + \"git commit\".\n\nCommitted to the wrong branch | \"git reset --soft HEAD~1\", switch branch, then re-commit.\n\nForgot to add a file to last commit | \"git add <file>\" then \"git commit --amend --no-edit\".\n\nCommand | What it does\n\ngit config --global alias.st status | Now \"git st\" works as a shortcut for \"git status\".\n\ngit config --global alias.co checkout | Now \"git co <branch>\" works as a shortcut for checkout.\n\ngit config --global alias.cm \"commit -m\" | Now \"git cm \\\"msg\\\"\" commits instantly."
+  },
+  {
+    "vector_id": 104,
+    "document_id": "upload_01487169f4144652",
+    "source": "notes-explainer.md",
+    "chunk_index": 0,
+    "content": "# How the Notes Section Works (Plain English Guide)\n\nThis explains how your portfolio's Notes section works — the website, the\ndatabase, and the admin tool — in simple terms. Keep this for your own\nreference, or use it to explain the project to someone else.\n\n---"
+  },
+  {
+    "vector_id": 105,
+    "document_id": "upload_01487169f4144652",
+    "source": "notes-explainer.md",
+    "chunk_index": 1,
+    "content": "## 1. The three pieces of this system\n\nThink of it like a restaurant:\n\n| Piece | What it's like | What it actually is |\n|---|---|---|\n| **Frontend** | The dining room customers sit in | Your Next.js website (`localhost:3000`) — what visitors actually see |\n| **Backend** | The kitchen | Your Spring Boot API (`localhost:8080`) — handles requests, talks to the database |\n| **Database** | The pantry/fridge | PostgreSQL — where all your notes, resources, projects, etc. are actually stored |\n| **Admin tool** (`admin.html`) | The staff-only ordering screen | A simple tool *you* use to add/edit notes — customers never see this |\n\nNone of these four pieces know how to do everything by themselves — they only\nwork together. If the backend isn't running, the frontend has nothing to show.\nIf the database isn't running, the backend has nothing to serve.\n\n---"
+  },
+  {
+    "vector_id": 106,
+    "document_id": "upload_01487169f4144652",
+    "source": "notes-explainer.md",
+    "chunk_index": 2,
+    "content": "## 2. How they talk to each other\n\nEvery piece talks over plain web addresses (URLs), the same way your browser\ntalks to any website:\n\n```\nAdmin tool  ──POST/GET/PUT/DELETE──▶  Backend (localhost:8080)  ──SQL──▶  Database\nFrontend    ──────GET──────────────▶  Backend (localhost:8080)  ──SQL──▶  Database\n```\n\n- The **admin tool** and the **frontend** never talk to the database directly.\n  They only ever talk to the **backend**.\n- The **backend** is the only thing allowed to touch the database. This is\n  intentional — it's the \"gatekeeper\" that checks requests are valid before\n  anything gets saved or changed.\n\n---"
+  },
+  {
+    "vector_id": 107,
+    "document_id": "upload_01487169f4144652",
+    "source": "notes-explainer.md",
+    "chunk_index": 3,
+    "content": "## 3. What `admin.html` actually is\n\n`admin.html` is **not part of your real website**. It's a small, separate\ntool — just one HTML file with some JavaScript in it — that you run on your\nown computer only, while you're working on content. Nobody visiting your\nportfolio site will ever see or use it.\n\nIt works by:\n1. You open it in a browser (served locally via `npx serve`, never as a live\n   public website).\n2. It sends requests to your backend at `http://localhost:8080` — the exact\n   same backend your real website uses.\n3. Whatever you create or edit through it (a note, a resource, an edit) gets\n   saved into the same database your live site reads from.\n\n**Why a separate tool instead of building admin pages into the real site?**\nBecause your real site is meant for visitors, and adding \"create/edit/delete\"\nbuttons there would mean anyone could find and use them (a security risk)\nunless real login/authentication is built — which is a bigger feature. The\nadmin tool sidesteps that for now by only running on your own machine.\n\n---"
+  },
+  {
+    "vector_id": 108,
+    "document_id": "upload_01487169f4144652",
+    "source": "notes-explainer.md",
+    "chunk_index": 4,
+    "content": "## 4. What happens, step by step, when you add a resource\n\nLet's trace exactly what happened when you added a YouTube link to the \"LLM\"\ntopic:\n\n1. **You** filled in a label and URL in `admin.html` and clicked \"Add.\"\n2. **The admin tool** sent a request to your backend:\n   `POST http://localhost:8080/api/v1/notes/{id}/resources/link`\n   with the label, URL, and type (\"YOUTUBE\") attached.\n3. **The backend** received this, checked it was valid (label not empty, URL\n   looks real), found the \"LLM\" note in the database by its ID, and created\n   a new row in a table called `note_resources` linking that YouTube link to\n   the LLM note.\n4. **The database** now has this permanently saved.\n5. **The next time anyone visits** `localhost:3000` → Notes → Generative AI →\n   LLM, your frontend sends a request to the backend:\n   `GET http://localhost:8080/api/v1/notes/llm`\n6. **The backend** looks up the LLM note *and* all its attached resources\n   from the database, and sends them back as data (JSON).\n7. **The frontend** receives that data and renders it as the page you see —\n   title, description, subtopics, and the Resources section at the bottom.\n\nThis is the same flow every time, for every note, every resource, every edit.\nNothing is \"hardcoded\" — it all comes from the database, live, on every page\nload.\n\n---"
+  },
+  {
+    "vector_id": 109,
+    "document_id": "upload_01487169f4144652",
+    "source": "notes-explainer.md",
+    "chunk_index": 5,
+    "content": "## 5. A few terms explained simply\n\n- **API** — a fixed set of \"addresses\" (like `/api/v1/notes`) that the\n  backend listens on. Think of it as a menu of things you're allowed to ask\n  the backend to do.\n- **Endpoint** — one specific address on that menu, e.g.\n  `GET /api/v1/notes/{slug}` is the endpoint for \"give me one note's details.\"\n- **Database table** — like a spreadsheet. `notes` is one spreadsheet (rows =\n  notes), `note_resources` is another (rows = attached links/files).\n- **Tree / parent-child** — each note can have a `parent`. A note with no\n  parent is a top-level \"Field\" (like Generative AI). A note whose parent is\n  a Field is a \"Topic\" (like RAG). This is how the drill-down navigation\n  works — the frontend just asks \"what are this note's children?\"\n- **CORS** — a browser security rule that blocks web pages from calling APIs\n  on a different address unless that API explicitly allows it. This is why\n  we had to configure the backend to allow requests from your admin tool's\n  address.\n- **Migration** (Flyway) — a numbered SQL file (`V1`, `V2`, `V3`...) that\n  changes the database's structure over time, in order, so everyone's\n  database ends up with the exact same tables/columns regardless of when\n  they set it up.\n\n---"
+  },
+  {
+    "vector_id": 110,
+    "document_id": "upload_01487169f4144652",
+    "source": "notes-explainer.md",
+    "chunk_index": 6,
+    "content": "## 6. Quick mental model to explain to someone else\n\n> \"My portfolio has a Next.js frontend and a Spring Boot backend with a\n> PostgreSQL database. The Notes section is structured as a tree — Fields\n> contain Topics, which can contain Subtopics — and every level can have\n> attached resources like YouTube links, PDFs, or images. I built a small\n> local admin tool that talks to the same backend API my live site uses, so\n> I can add and edit content without needing a public admin panel yet.\"\n\nThat's genuinely an accurate, portfolio-interview-ready description of what\nyou've built."
   }
 ]

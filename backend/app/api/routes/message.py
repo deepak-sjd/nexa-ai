@@ -157,8 +157,8 @@ def create_message(
 
     rag_result = rag_service.search(
         query=data.content,
-        retrieval_top_k=8,
-        rerank_top_k=5,
+        retrieval_top_k=12,
+        rerank_top_k=8,
     )
 
     retrieved_context = rag_result["context"]
@@ -304,8 +304,8 @@ def create_message_stream(
 
     rag_result = rag_service.search(
         query=data.content,
-        retrieval_top_k=8,
-        rerank_top_k=5,
+        retrieval_top_k=12,
+        rerank_top_k=8,
     )
     retrieved_context = rag_result["context"]
 

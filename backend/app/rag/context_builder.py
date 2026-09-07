@@ -327,6 +327,6 @@ class ContextBuilder:
 # ================================================================
 
 context_builder = ContextBuilder(
-    max_chunks=5,
-    max_context_characters=12000,
+    max_chunks=8,
+    max_context_characters=16000,
 )
