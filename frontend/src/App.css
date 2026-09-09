@@ -24,10 +24,16 @@
 
   --accent: #6366f1;
   --accent-dark: #4f46e5;
+  --accent-bright: #837dff;
+
+  /* Used sparingly — one or two spots, not everywhere */
+  --accent-secondary: #c264e0;
 
   --success: #30d158;
 
   --content-width: 980px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
   font-family:
     -apple-system,
@@ -74,15 +80,36 @@ body {
   background:
     radial-gradient(
       circle at 75% 0%,
-      rgba(99, 102, 241, 0.08),
+      rgba(99, 102, 241, 0.1),
       transparent 32%
     ),
     radial-gradient(
       circle at 10% 85%,
-      rgba(0, 122, 255, 0.035),
-      transparent 28%
+      rgba(194, 100, 224, 0.045),
+      transparent 30%
     ),
     var(--bg);
+
+  background-size: 140% 140%, 140% 140%, 100% 100%;
+  background-position: 0% 0%, 100% 100%, 0 0;
+
+  animation: ambientDrift 34s var(--ease-out) infinite alternate;
+}
+
+@keyframes ambientDrift {
+  0% {
+    background-position: 0% 0%, 100% 100%, 0 0;
+  }
+
+  100% {
+    background-position: 18% 12%, 82% 88%, 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    animation: none;
+  }
 }
 
 button,
@@ -148,7 +175,7 @@ textarea {
   background:
     linear-gradient(
       180deg,
-      rgba(12, 13, 18, 0.98),
+      rgba(13, 14, 20, 0.98),
       rgba(7, 8, 12, 0.98)
     );
 
@@ -156,6 +183,33 @@ textarea {
 
   box-shadow:
     12px 0 40px rgba(0, 0, 0, 0.2);
+
+  overflow: hidden;
+}
+
+.sidebar::before {
+  content: "";
+
+  position: absolute;
+  top: -120px;
+  left: -60px;
+
+  width: 280px;
+  height: 280px;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(99, 102, 241, 0.16),
+      transparent 70%
+    );
+
+  pointer-events: none;
+}
+
+.sidebar > * {
+  position: relative;
+  z-index: 1;
 }
 
 
@@ -202,8 +256,27 @@ textarea {
       #4f46e5
     );
 
-  box-shadow:
-    0 7px 22px rgba(79, 70, 229, 0.28);
+  animation: logoGlow 4.5s ease-in-out infinite;
+}
+
+@keyframes logoGlow {
+  0%,
+  100% {
+    box-shadow:
+      0 7px 22px rgba(79, 70, 229, 0.28);
+  }
+
+  50% {
+    box-shadow:
+      0 7px 26px rgba(109, 103, 244, 0.45),
+      0 0 18px rgba(194, 100, 224, 0.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-logo {
+    animation: none;
+  }
 }
 
 .sidebar-brand h2 {
@@ -1230,6 +1303,8 @@ textarea {
 }
 
 .sidebar-status-dot {
+  position: relative;
+
   width: 6px;
   height: 6px;
 
@@ -1241,6 +1316,38 @@ textarea {
 
   box-shadow:
     0 0 8px rgba(48, 209, 88, 0.55);
+}
+
+.sidebar-status-dot::after {
+  content: "";
+
+  position: absolute;
+  inset: -4px;
+
+  border-radius: 50%;
+
+  border: 1px solid rgba(48, 209, 88, 0.5);
+
+  animation: statusPulse 2.4s var(--ease-out) infinite;
+}
+
+@keyframes statusPulse {
+  0% {
+    opacity: 0.6;
+    transform: scale(0.6);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-status-dot::after {
+    animation: none;
+    display: none;
+  }
 }
 
 
@@ -1374,10 +1481,21 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.13);
 
   box-shadow:
-    0 8px 28px rgba(79, 70, 229, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 
+  animation: logoGlow 4.5s ease-in-out infinite;
+
   user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-logo {
+    animation: none;
+
+    box-shadow:
+      0 8px 28px rgba(79, 70, 229, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
 }
 
 .brand-text {
@@ -1442,6 +1560,8 @@ textarea {
 }
 
 .status-dot {
+  position: relative;
+
   width: 7px;
   height: 7px;
 
@@ -1454,6 +1574,26 @@ textarea {
   box-shadow:
     0 0 0 3px rgba(48, 209, 88, 0.08),
     0 0 12px rgba(48, 209, 88, 0.5);
+}
+
+.status-dot::after {
+  content: "";
+
+  position: absolute;
+  inset: -5px;
+
+  border-radius: 50%;
+
+  border: 1px solid rgba(48, 209, 88, 0.45);
+
+  animation: statusPulse 2.4s var(--ease-out) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-dot::after {
+    animation: none;
+    display: none;
+  }
 }
 
 
@@ -1761,9 +1901,10 @@ textarea {
 
   background:
     linear-gradient(
-      145deg,
-      rgba(99, 102, 241, 0.98),
-      rgba(79, 70, 229, 0.96)
+      150deg,
+      rgba(109, 103, 244, 0.98),
+      rgba(79, 70, 229, 0.97) 55%,
+      rgba(147, 73, 201, 0.92)
     );
 
   border: 1px solid rgba(150, 145, 255, 0.25);
@@ -2370,8 +2511,9 @@ textarea {
   background:
     linear-gradient(
       145deg,
-      #6d67f4,
-      #4f46e5
+      #7a74f7,
+      #4f46e5 60%,
+      #9349c9
     );
 
   font-size: 18px;
@@ -2384,9 +2526,9 @@ textarea {
     0 8px 24px rgba(79, 70, 229, 0.25);
 
   transition:
-    transform 160ms ease,
+    transform 220ms var(--ease-out),
     opacity 160ms ease,
-    box-shadow 160ms ease,
+    box-shadow 220ms var(--ease-out),
     filter 160ms ease;
 }
 
@@ -2396,7 +2538,7 @@ textarea {
   filter: brightness(1.06);
 
   box-shadow:
-    0 12px 30px rgba(79, 70, 229, 0.35);
+    0 12px 32px rgba(109, 103, 244, 0.4);
 }
 
 .send-button:active:not(:disabled) {
