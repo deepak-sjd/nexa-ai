@@ -124,6 +124,51 @@ function CloseIcon() {
   );
 }
 
+function MicIcon() {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+      <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+      <path d="M12 18v4" />
+      <path d="M8 22h8" />
+    </svg>
+  );
+}
+
+function SpeakerIcon({ active = false }) {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M11 5 6 9H2v6h4l5 4V5Z" />
+      {active ? (
+        <>
+          <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+          <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+        </>
+      ) : (
+        <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+      )}
+    </svg>
+  );
+}
+
 // ============================================================
 // MERMAID DIAGRAM RENDERING
 // ============================================================
@@ -259,6 +304,13 @@ function App() {
 
   const [isDraggingFile, setIsDraggingFile] = useState(false);
 
+  const [isListening, setIsListening] = useState(false);
+
+  const [speechSupported, setSpeechSupported] = useState(true);
+
+  const [speakingMessageId, setSpeakingMessageId] =
+    useState(null);
+
   // ============================================================
   // REFS
   // ============================================================
@@ -266,6 +318,8 @@ function App() {
   const messagesEndRef = useRef(null);
 
   const fileInputRef = useRef(null);
+
+  const speechRecognitionRef = useRef(null);
 
   const textareaRef = useRef(null);
 
@@ -281,6 +335,30 @@ function App() {
       block: "end",
     });
   }, [messages, loading]);
+
+  // ============================================================
+  // VOICE: FEATURE DETECTION
+  // ============================================================
+
+  useEffect(() => {
+    const SpeechRecognitionApi =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
+
+    const hasSpeechSynthesis =
+      typeof window.speechSynthesis !== "undefined";
+
+    setSpeechSupported(
+      Boolean(SpeechRecognitionApi) && hasSpeechSynthesis
+    );
+
+    // Stop any speaking/listening if the component unmounts
+    // (e.g. hot reload during development).
+    return () => {
+      speechRecognitionRef.current?.stop();
+      window.speechSynthesis?.cancel();
+    };
+  }, []);
 
   // ============================================================
   // CLOSE CONVERSATION MENU ON OUTSIDE CLICK
@@ -1150,6 +1228,166 @@ function App() {
   }
 
   // ============================================================
+  // VOICE INPUT (SPEECH-TO-TEXT)
+  // ============================================================
+
+  function startListening() {
+    const SpeechRecognitionApi =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
+
+    if (!SpeechRecognitionApi) {
+      console.warn(
+        "Speech recognition is not supported in this browser."
+      );
+      return;
+    }
+
+    // Reading and speaking at the same time is confusing —
+    // stop any response currently being read aloud.
+    stopSpeaking();
+
+    const recognition = new SpeechRecognitionApi();
+
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+
+    let finalTranscript = "";
+
+    recognition.onresult = (event) => {
+      let interimTranscript = "";
+
+      for (
+        let i = event.resultIndex;
+        i < event.results.length;
+        i++
+      ) {
+        const transcriptChunk =
+          event.results[i][0].transcript;
+
+        if (event.results[i].isFinal) {
+          finalTranscript += transcriptChunk;
+        } else {
+          interimTranscript += transcriptChunk;
+        }
+      }
+
+      setInput(
+        (finalTranscript + interimTranscript).trim()
+      );
+
+      requestAnimationFrame(() => {
+        resizeTextarea();
+      });
+    };
+
+    recognition.onerror = (event) => {
+      console.error(
+        "Speech recognition error:",
+        event.error
+      );
+
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    speechRecognitionRef.current = recognition;
+
+    setIsListening(true);
+
+    recognition.start();
+  }
+
+  function stopListening() {
+    speechRecognitionRef.current?.stop();
+
+    setIsListening(false);
+  }
+
+  function toggleListening() {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  }
+
+  // ============================================================
+  // VOICE OUTPUT (TEXT-TO-SPEECH)
+  // ============================================================
+
+  function stripMarkdownForSpeech(markdownText) {
+    return markdownText
+      // Fenced code blocks — don't read code aloud.
+      .replace(/```[\s\S]*?```/g, "code block omitted.")
+      // Inline code.
+      .replace(/`([^`]+)`/g, "$1")
+      // Images / links — keep only the visible label.
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+      // Headings, bold, italics, blockquote/list markers.
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/\*([^*]+)\*/g, "$1")
+      .replace(/^>\s+/gm, "")
+      .replace(/^[-*+]\s+/gm, "")
+      .replace(/^\d+\.\s+/gm, "")
+      .trim();
+  }
+
+  function stopSpeaking() {
+    window.speechSynthesis?.cancel();
+
+    setSpeakingMessageId(null);
+  }
+
+  function speakMessage(messageId, content) {
+    if (
+      typeof window.speechSynthesis === "undefined"
+    ) {
+      return;
+    }
+
+    // Only one message speaks at a time.
+    window.speechSynthesis.cancel();
+
+    if (speakingMessageId === messageId) {
+      // Clicking the same button again just stops it.
+      setSpeakingMessageId(null);
+      return;
+    }
+
+    const cleanedText = stripMarkdownForSpeech(content);
+
+    if (!cleanedText) {
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(
+      cleanedText
+    );
+
+    utterance.rate = 1;
+    utterance.pitch = 1;
+
+    utterance.onend = () => {
+      setSpeakingMessageId(null);
+    };
+
+    utterance.onerror = () => {
+      setSpeakingMessageId(null);
+    };
+
+    setSpeakingMessageId(messageId);
+
+    window.speechSynthesis.speak(utterance);
+  }
+
+  // ============================================================
   // SEND MESSAGE
   // ============================================================
 
@@ -1171,6 +1409,8 @@ function App() {
 
       return;
     }
+
+    stopSpeaking();
 
     // ========================================================
     // USER MESSAGE
@@ -2130,28 +2370,74 @@ function App() {
 
                       </div>
 
-                      {/* COPY */}
+                      {/* MESSAGE ACTIONS */}
 
                       {isAssistant &&
                         message.content &&
                         !isStreaming && (
-                          <button
-                            className="copy-button"
-                            onClick={() =>
-                              copyMessage(
-                                message.id,
-                                message.content
-                              )
-                            }
-                            type="button"
-                          >
-                            {
-                              copiedMessageId ===
-                              message.id
-                                ? "Copied"
-                                : "Copy"
-                            }
-                          </button>
+                          <div className="message-actions">
+                            <button
+                              className="copy-button"
+                              onClick={() =>
+                                copyMessage(
+                                  message.id,
+                                  message.content
+                                )
+                              }
+                              type="button"
+                            >
+                              {
+                                copiedMessageId ===
+                                message.id
+                                  ? "Copied"
+                                  : "Copy"
+                              }
+                            </button>
+
+                            {typeof window !==
+                              "undefined" &&
+                              window.speechSynthesis && (
+                                <button
+                                  className={`speak-button ${
+                                    speakingMessageId ===
+                                    message.id
+                                      ? "speaking"
+                                      : ""
+                                  }`}
+                                  onClick={() =>
+                                    speakMessage(
+                                      message.id,
+                                      message.content
+                                    )
+                                  }
+                                  type="button"
+                                  aria-label={
+                                    speakingMessageId ===
+                                    message.id
+                                      ? "Stop reading aloud"
+                                      : "Read aloud"
+                                  }
+                                  title={
+                                    speakingMessageId ===
+                                    message.id
+                                      ? "Stop"
+                                      : "Read aloud"
+                                  }
+                                >
+                                  <SpeakerIcon
+                                    active={
+                                      speakingMessageId ===
+                                      message.id
+                                    }
+                                  />
+
+                                  {speakingMessageId ===
+                                  message.id
+                                    ? "Stop"
+                                    : "Listen"}
+                                </button>
+                              )}
+                          </div>
                         )}
 
                     </div>
@@ -2189,13 +2475,38 @@ function App() {
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder={
-                conversationId
+                isListening
+                  ? "Listening..."
+                  : conversationId
                   ? "Ask NEXA AI anything..."
                   : "Connecting to NEXA AI..."
               }
               rows="1"
               disabled={!conversationId}
             />
+
+            {speechSupported && (
+              <button
+                type="button"
+                className={`mic-button ${
+                  isListening ? "listening" : ""
+                }`}
+                onClick={toggleListening}
+                disabled={!conversationId}
+                aria-label={
+                  isListening
+                    ? "Stop voice input"
+                    : "Start voice input"
+                }
+                title={
+                  isListening
+                    ? "Stop listening"
+                    : "Speak your message"
+                }
+              >
+                <MicIcon />
+              </button>
+            )}
 
             <button
               className="send-button"
