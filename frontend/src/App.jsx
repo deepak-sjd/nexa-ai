@@ -255,6 +255,62 @@ function MermaidDiagram({ code }) {
   );
 }
 
+const EXAMPLE_PROMPTS = [
+  {
+    label: "Explain how RAG works",
+    prompt:
+      "Explain how RAG works in this system, step by step.",
+  },
+  {
+    label: "Diagram the pipeline",
+    prompt:
+      "Show me a diagram of NEXA AI's retrieval pipeline.",
+  },
+  {
+    label: "What can I upload?",
+    prompt:
+      "What file types can I upload, and what happens to them?",
+  },
+  {
+    label: "Summarize a concept",
+    prompt:
+      "Summarize the difference between embeddings and reranking.",
+  },
+];
+
+function EmptyState({ onPromptClick }) {
+  return (
+    <div className="empty-state">
+      <div className="empty-state-logo">
+        <span>N</span>
+      </div>
+
+      <h1 className="empty-state-title">
+        How can I help you today?
+      </h1>
+
+      <p className="empty-state-subtitle">
+        Ask a question, upload a document, or request a
+        diagram — NEXA AI grounds its answers in what it
+        actually knows.
+      </p>
+
+      <div className="empty-state-prompts">
+        {EXAMPLE_PROMPTS.map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            className="empty-state-prompt-card"
+            onClick={() => onPromptClick(item.prompt)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   // ============================================================
   // STATE
@@ -1157,6 +1213,15 @@ function App() {
   // ============================================================
   // AUTO RESIZE TEXTAREA
   // ============================================================
+
+  function handleExamplePromptClick(promptText) {
+    setInput(promptText);
+
+    requestAnimationFrame(() => {
+      resizeTextarea();
+      textareaRef.current?.focus();
+    });
+  }
 
   function resizeTextarea() {
     const textarea = textareaRef.current;
@@ -2206,12 +2271,20 @@ function App() {
 
           <div className="chat-content">
 
-            {messages.map(
-              (message) => {
+            {messages.length === 1 &&
+            String(messages[0].id).startsWith(
+              "welcome"
+            ) ? (
+              <EmptyState
+                onPromptClick={handleExamplePromptClick}
+              />
+            ) : (
+              messages.map(
+                (message) => {
 
-                const isUser =
-                  message.role ===
-                  "user";
+                  const isUser =
+                    message.role ===
+                    "user";
 
                 const isAssistant =
                   message.role ===
@@ -2239,7 +2312,11 @@ function App() {
                     {/* ASSISTANT AVATAR */}
 
                     {isAssistant && (
-                      <div className="avatar assistant-avatar">
+                      <div
+                        className={`avatar assistant-avatar ${
+                          isStreaming ? "active" : ""
+                        }`}
+                      >
                         N
                       </div>
                     )}
@@ -2452,7 +2529,8 @@ function App() {
 
                   </div>
                 );
-              }
+                }
+              )
             )}
 
             <div ref={messagesEndRef} />

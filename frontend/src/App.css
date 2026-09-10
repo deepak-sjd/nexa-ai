@@ -31,7 +31,7 @@
 
   --success: #30d158;
 
-  --content-width: 980px;
+  --content-width: 1120px;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
@@ -1681,6 +1681,156 @@ textarea {
 
 
 /* =========================================================
+   EMPTY STATE (HERO WELCOME)
+   ========================================================= */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  max-width: 620px;
+
+  margin: 8vh auto 0;
+
+  text-align: center;
+
+  animation:
+    emptyStateAppear
+    600ms
+    var(--ease-out)
+    both;
+}
+
+@keyframes emptyStateAppear {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.empty-state-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 68px;
+  height: 68px;
+
+  margin-bottom: 22px;
+
+  border-radius: 20px;
+
+  color: #ffffff;
+
+  font-size: 24px;
+  font-weight: 700;
+
+  background:
+    linear-gradient(
+      145deg,
+      #7a74f7,
+      #4f46e5 60%,
+      #9349c9
+    );
+
+  border: 1px solid rgba(255, 255, 255, 0.15);
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+
+  animation: logoGlow 4.5s ease-in-out infinite;
+}
+
+.empty-state-title {
+  margin: 0 0 10px;
+
+  color: #ffffff;
+
+  font-size: 27px;
+  font-weight: 700;
+
+  letter-spacing: -0.015em;
+}
+
+.empty-state-subtitle {
+  margin: 0 0 32px;
+
+  max-width: 460px;
+
+  color: #8c8d97;
+
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+.empty-state-prompts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+
+  gap: 10px;
+
+  width: 100%;
+}
+
+.empty-state-prompt-card {
+  position: relative;
+
+  padding: 15px 17px;
+
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+
+  color: #c7c8d1;
+
+  background: rgba(255, 255, 255, 0.025);
+
+  font-size: 13px;
+  font-weight: 550;
+  text-align: left;
+
+  cursor: pointer;
+
+  transition:
+    transform 220ms var(--ease-out),
+    border-color 220ms ease,
+    background 220ms ease,
+    color 220ms ease;
+}
+
+.empty-state-prompt-card:hover {
+  transform: translateY(-2px);
+
+  color: #ffffff;
+
+  background: rgba(255, 255, 255, 0.05);
+
+  border-color: rgba(124, 118, 255, 0.4);
+}
+
+@media (max-width: 560px) {
+  .empty-state-prompts {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .empty-state {
+    animation: none;
+  }
+
+  .empty-state-logo {
+    animation: none;
+  }
+}
+
+
+/* =========================================================
    MESSAGE ROW
    ========================================================= */
 
@@ -1694,8 +1844,8 @@ textarea {
 
   animation:
     messageAppear
-    300ms
-    ease
+    380ms
+    var(--ease-out)
     both;
 }
 
@@ -1703,13 +1853,13 @@ textarea {
   from {
     opacity: 0;
 
-    transform: translateY(8px);
+    transform: translateY(8px) scale(0.985);
   }
 
   to {
     opacity: 1;
 
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -1752,20 +1902,26 @@ textarea {
 .assistant-avatar {
   margin-right: 13px;
 
-  color: #eeeef2;
+  color: #ffffff;
 
   background:
     linear-gradient(
       145deg,
-      rgba(255, 255, 255, 0.075),
-      rgba(255, 255, 255, 0.035)
+      #6d67f4,
+      #4f46e5
     );
 
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.13);
 
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    0 7px 20px rgba(0, 0, 0, 0.2);
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 7px 20px rgba(79, 70, 229, 0.22);
+
+  transition: box-shadow 300ms ease;
+}
+
+.assistant-avatar.active {
+  animation: logoGlow 1.6s ease-in-out infinite;
 }
 
 
@@ -1804,6 +1960,11 @@ textarea {
   width: fit-content;
 
   max-width: min(88%, 860px);
+}
+
+.assistant-row .message-wrapper {
+  width: 100%;
+  max-width: 100%;
 }
 
 .user-row .message-wrapper {
@@ -1851,8 +2012,8 @@ textarea {
   max-width: 100%;
 
   padding:
-    14px
-    18px;
+    11px
+    16px;
 
   border-radius: 18px;
 
@@ -1864,7 +2025,8 @@ textarea {
 
   transition:
     border-color 180ms ease,
-    box-shadow 180ms ease;
+    box-shadow 220ms var(--ease-out),
+    transform 220ms var(--ease-out);
 }
 
 
@@ -1873,22 +2035,17 @@ textarea {
    ========================================================= */
 
 .assistant-message {
+  width: 100%;
+
+  padding: 2px 0;
+
   color: #e4e4e9;
 
-  background:
-    linear-gradient(
-      145deg,
-      rgba(27, 29, 37, 0.96),
-      rgba(18, 20, 27, 0.96)
-    );
+  background: transparent;
 
-  border: 1px solid rgba(255, 255, 255, 0.095);
+  border: none;
 
-  border-top-left-radius: 7px;
-
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.035),
-    0 10px 30px rgba(0, 0, 0, 0.16);
+  box-shadow: none;
 }
 
 
@@ -2246,7 +2403,12 @@ textarea {
 
   border-radius: 50%;
 
-  background: #a4a6b0;
+  background:
+    linear-gradient(
+      145deg,
+      #8b85ff,
+      #6366f1
+    );
 
   animation:
     thinkingAnimation
@@ -2345,13 +2507,19 @@ textarea {
 
   transition:
     color 160ms ease,
-    background 160ms ease;
+    background 160ms ease,
+    transform 140ms ease;
 }
 
 .copy-button:hover {
   color: #c4c4cc;
 
   background: rgba(255, 255, 255, 0.055);
+}
+
+.copy-button:active,
+.speak-button:active {
+  transform: scale(0.94);
 }
 
 .speak-button {
@@ -2374,7 +2542,8 @@ textarea {
 
   transition:
     color 160ms ease,
-    background 160ms ease;
+    background 160ms ease,
+    transform 140ms ease;
 }
 
 .speak-button:hover {
@@ -2963,6 +3132,15 @@ button:focus-visible {
     font-size: 14px;
   }
 
+  .mic-button {
+    width: 40px;
+    height: 40px;
+
+    flex-basis: 40px;
+
+    border-radius: 12px;
+  }
+
   .send-button {
     width: 44px;
     height: 44px;
@@ -2984,6 +3162,32 @@ button:focus-visible {
 
   .markdown-content table {
     font-size: 12px;
+  }
+
+
+  /* Empty state */
+
+  .empty-state {
+    margin-top: 4vh;
+  }
+
+  .empty-state-logo {
+    width: 56px;
+    height: 56px;
+
+    font-size: 20px;
+  }
+
+  .empty-state-title {
+    font-size: 21px;
+  }
+
+  .empty-state-subtitle {
+    font-size: 13px;
+  }
+
+  .empty-state-prompts {
+    grid-template-columns: 1fr;
   }
 }
 
