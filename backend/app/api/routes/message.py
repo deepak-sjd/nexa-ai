@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -21,6 +22,53 @@ router = APIRouter(
     prefix="/conversations",
     tags=["Messages"],
 )
+
+
+def extract_sources(
+    reranked_results: list,
+) -> list[dict]:
+    """
+    Build a deduplicated, ordered list of sources from the
+    reranked (already relevance-filtered) RAG results.
+
+    Only chunks that passed the reranker's relevance threshold
+    reach here, so every entry represents content that was
+    genuinely relevant enough to be handed to the LLM as
+    context — not just anything that was retrieved.
+    """
+
+    sources: list[dict] = []
+    seen_document_ids: set[str] = set()
+
+    for result in reranked_results:
+
+        metadata = getattr(result, "metadata", None) or {}
+
+        document_id = metadata.get("document_id")
+        raw_source = metadata.get("source")
+
+        if not raw_source:
+            continue
+
+        dedup_key = document_id or raw_source
+
+        if dedup_key in seen_document_ids:
+            continue
+
+        seen_document_ids.add(dedup_key)
+
+        # Show just the filename, not a full path — codebase
+        # sources are stored as full relative paths.
+        display_name = Path(raw_source).name or raw_source
+
+        sources.append(
+            {
+                "source": display_name,
+                "document_id": document_id,
+            }
+        )
+
+    return sources
 
 
 DEFAULT_CONVERSATION_TITLE = "New Conversation"
@@ -233,10 +281,15 @@ def create_message(
     )
 
     # 5. Save assistant response
+    message_sources = extract_sources(
+        rag_result.get("reranked", [])
+    )
+
     assistant_message = Message(
         conversation_id=conversation_id,
         role="assistant",
         content=ai_response,
+        sources=message_sources or None,
     )
 
     db.add(assistant_message)
@@ -308,6 +361,10 @@ def create_message_stream(
         rerank_top_k=8,
     )
     retrieved_context = rag_result["context"]
+
+    message_sources = extract_sources(
+        rag_result.get("reranked", [])
+    )
 
     retrieval_seconds = (
         time.perf_counter() - retrieval_started_at
@@ -387,6 +444,7 @@ def create_message_stream(
                 conversation_id=conversation_id,
                 role="assistant",
                 content=full_response,
+                sources=message_sources or None,
             )
 
             db.add(assistant_message)
@@ -432,6 +490,7 @@ def create_message_stream(
                     "conversation_id": conversation_id,
                     "role": "assistant",
                     "content": full_response,
+                    "sources": message_sources or None,
                 },
             }
 
