@@ -69,11 +69,11 @@ function TrashIcon() {
   );
 }
 
-function FileIcon() {
+function FileIcon({ size = 17 }) {
   return (
     <svg
-      width="17"
-      height="17"
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -701,6 +701,7 @@ function App() {
           id: message.id,
           role: message.role,
           content: message.content || "",
+          sources: message.sources || null,
         })
       );
 
@@ -1687,6 +1688,10 @@ function App() {
                                 data.message
                                   .content ||
                                 message.content,
+                              sources:
+                                data.message
+                                  .sources ||
+                                null,
                             }
                           : message
                     )
@@ -1792,6 +1797,10 @@ function App() {
                               data.message
                                 .content ||
                               message.content,
+                            sources:
+                              data.message
+                                .sources ||
+                              null,
                           }
                         : message
                   )
@@ -2446,6 +2455,28 @@ function App() {
                           )}
 
                       </div>
+
+                      {/* SOURCES */}
+
+                      {isAssistant &&
+                        !isStreaming &&
+                        message.sources &&
+                        message.sources.length >
+                          0 && (
+                          <div className="message-sources">
+                            <FileIcon size={12} />
+
+                            <span>
+                              Sources:{" "}
+                              {message.sources
+                                .map(
+                                  (item) =>
+                                    item.source
+                                )
+                                .join(", ")}
+                            </span>
+                          </div>
+                        )}
 
                       {/* MESSAGE ACTIONS */}
 
