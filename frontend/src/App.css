@@ -2635,7 +2635,7 @@ textarea {
     var(--content-width)
   );
 
-  min-height: 64px;
+  min-height: 56px;
 
   margin: 0 auto;
 
@@ -2693,13 +2693,13 @@ textarea {
 
   width: 100%;
 
-  min-height: 46px;
+  min-height: 40px;
   max-height: 150px;
 
   padding:
-    12px
-    10px
     9px
+    10px
+    8px
     0;
 
   border: 0;
@@ -2741,10 +2741,10 @@ textarea {
   align-items: center;
   justify-content: center;
 
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
 
-  flex: 0 0 44px;
+  flex: 0 0 40px;
 
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 14px;
@@ -2828,10 +2828,10 @@ textarea {
   align-items: center;
   justify-content: center;
 
-  width: 48px;
-  height: 48px;
+  width: 42px;
+  height: 42px;
 
-  flex: 0 0 48px;
+  flex: 0 0 42px;
 
   border-radius: 15px;
 

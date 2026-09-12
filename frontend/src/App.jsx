@@ -2373,20 +2373,40 @@ function App() {
                                   ),
 
                                   code: ({
-                                    inline,
+                                    node,
                                     className,
                                     children,
                                     ...props
                                   }) => {
+                                    // react-markdown v9+ no
+                                    // longer passes an `inline`
+                                    // prop. Fenced code blocks
+                                    // always get a
+                                    // `language-xxx` className;
+                                    // inline code spans never
+                                    // do. Multi-line content
+                                    // with no language (a bare
+                                    // ``` fence) is treated as
+                                    // a block too.
+                                    const contentText = String(
+                                      children
+                                    );
+
+                                    const isBlock =
+                                      Boolean(className) ||
+                                      contentText.includes(
+                                        "\n"
+                                      );
+
                                     const isMermaid =
-                                      !inline &&
                                       className ===
-                                        "language-mermaid";
+                                      "language-mermaid";
 
                                     if (isMermaid) {
-                                      const diagramCode = String(
-                                        children
-                                      ).replace(/\n$/, "");
+                                      const diagramCode = contentText.replace(
+                                        /\n$/,
+                                        ""
+                                      );
 
                                       if (isStreaming) {
                                         // Wait for the full
@@ -2408,7 +2428,7 @@ function App() {
                                       );
                                     }
 
-                                    return inline ? (
+                                    return !isBlock ? (
                                       <code
                                         className="inline-code"
                                         {...props}
