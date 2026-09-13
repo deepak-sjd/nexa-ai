@@ -729,8 +729,8 @@ class Reranker:
 
 reranker = Reranker(
     top_k=5,
-    min_score=0.35,
-    semantic_weight=0.75,
-    lexical_weight=0.25,
+    min_score=0.42,
+    semantic_weight=0.85,
+    lexical_weight=0.15,
     min_lexical_overlap=0.0,
 )
