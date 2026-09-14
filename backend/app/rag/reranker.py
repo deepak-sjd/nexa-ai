@@ -206,6 +206,7 @@ class Reranker:
         semantic_weight: float = 0.75,
         lexical_weight: float = 0.25,
         min_lexical_overlap: float = 0.0,
+         max_score_gap: float = 0.15,
     ):
         """
         Initialize the reranker.
@@ -273,6 +274,17 @@ class Reranker:
 
         self.min_lexical_overlap = self._clamp(
             min_lexical_overlap,
+            0.0,
+            1.0,
+        )
+
+        # A chunk clearing min_score in isolation isn't
+        # necessarily a good citation — if the top match for
+        # THIS query scores much higher, anything trailing more
+        # than max_score_gap behind it is mediocre noise, not a
+        # real source, even though it passed the absolute floor.
+        self.max_score_gap = self._clamp(
+            max_score_gap,
             0.0,
             1.0,
         )
@@ -441,6 +453,26 @@ class Reranker:
             ),
             reverse=True,
         )
+
+        # ------------------------------------------------------
+        # Relative score gap filter.
+        #
+        # A query can have one clearly correct match plus a
+        # handful of mediocre ones that still clear min_score
+        # in isolation. Once we know the best score for THIS
+        # query, drop anything trailing too far behind it.
+        # ------------------------------------------------------
+
+        if reranked:
+
+            top_score = reranked[0].score
+
+            reranked = [
+                item
+                for item in reranked
+                if item.score
+                >= top_score - self.max_score_gap
+            ]
 
         # ------------------------------------------------------
         # Final top-K selection.
@@ -733,4 +765,5 @@ reranker = Reranker(
     semantic_weight=0.85,
     lexical_weight=0.15,
     min_lexical_overlap=0.0,
+    max_score_gap=0.15,
 )
