@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from app.core.config import settings
 from app.core.logging_config import configure_logging
 
@@ -9,7 +8,7 @@ from app.api.routes import (
     conversations,
     message,
     documents,
-    images,
+    images
 )
 
 configure_logging(debug=settings.debug)
