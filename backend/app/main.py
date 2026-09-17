@@ -9,6 +9,7 @@ from app.api.routes import (
     conversations,
     message,
     documents,
+    images,
 )
 
 configure_logging(debug=settings.debug)
@@ -57,6 +58,11 @@ app.include_router(
 
 app.include_router(
     documents.router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    images.router,
     prefix="/api/v1",
 )
 
