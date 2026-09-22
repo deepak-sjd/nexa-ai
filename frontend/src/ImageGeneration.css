@@ -1,0 +1,594 @@
+/* =========================================================
+   NEXA AI — Image generation UI
+   Uses the design tokens from App.css (--accent, --border...).
+   Imported from App.jsx right after App.css.
+   ========================================================= */
+
+.generated-image,
+.image-pending,
+.image-error {
+  --image-card-width: min(100%, 480px);
+}
+
+
+/* =========================================================
+   CHAT SCROLL ANCHOR
+   The composer is absolutely positioned over the bottom of the
+   chat, so scrolling the anchor to the container's edge left the
+   newest message hidden behind it. The margin keeps the anchor
+   (and so the newest message) above the composer. Applies to
+   text replies as well as images.
+   ========================================================= */
+
+.chat-end-anchor {
+  scroll-margin-bottom: 96px;
+}
+
+
+/* =========================================================
+   COMPOSER: IMAGE MODE TOGGLE
+   Same metrics as .mic-button so the row stays aligned.
+   ========================================================= */
+
+.image-toggle-button {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 40px;
+  height: 40px;
+
+  flex: 0 0 40px;
+
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+
+  color: #9a9ba8;
+
+  background: rgba(255, 255, 255, 0.03);
+
+  cursor: pointer;
+
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.image-toggle-button:hover:not(:disabled) {
+  color: #e2e2e7;
+
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.image-toggle-button:disabled {
+  cursor: not-allowed;
+
+  opacity: 0.35;
+}
+
+.image-toggle-button:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+}
+
+.image-toggle-button[aria-pressed="true"] {
+  color: #ffffff;
+
+  border-color: rgba(131, 125, 255, 0.55);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(99, 102, 241, 0.55),
+      rgba(79, 70, 229, 0.42)
+    );
+
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16);
+}
+
+.input-hint .input-hint-mode {
+  color: var(--accent-bright);
+}
+
+
+/* =========================================================
+   GENERATED IMAGE
+   ========================================================= */
+
+.generated-image {
+  width: var(--image-card-width);
+
+  margin: 2px 0 0;
+
+  display: flex;
+  flex-direction: column;
+}
+
+.generated-image-frame {
+  position: relative;
+
+  display: block;
+
+  width: 100%;
+
+  /* Reserve a square while loading so the chat doesn't jump;
+     released to the real ratio once the image has loaded. */
+  aspect-ratio: 1 / 1;
+
+  padding: 0;
+
+  overflow: hidden;
+
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+
+  background: var(--surface-strong);
+
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.38);
+
+  cursor: zoom-in;
+}
+
+.generated-image-frame.is-loaded {
+  aspect-ratio: auto;
+}
+
+.generated-image-frame:disabled {
+  cursor: default;
+}
+
+.generated-image-frame:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 3px;
+}
+
+.generated-image-frame img {
+  display: block;
+
+  width: 100%;
+  height: auto;
+
+  opacity: 0;
+
+  transition: opacity 260ms ease;
+
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.generated-image-frame.is-loaded img {
+  opacity: 1;
+}
+
+.generated-image-frame.is-error {
+  aspect-ratio: 16 / 9;
+
+  cursor: default;
+}
+
+.generated-image-broken {
+  position: absolute;
+  inset: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 16px;
+
+  color: var(--text-secondary);
+
+  font-size: 13px;
+}
+
+.generated-image-skeleton,
+.image-pending-shimmer {
+  position: absolute;
+  inset: 0;
+
+  background:
+    linear-gradient(
+      100deg,
+      rgba(255, 255, 255, 0) 20%,
+      rgba(255, 255, 255, 0.06) 50%,
+      rgba(255, 255, 255, 0) 80%
+    ),
+    rgba(255, 255, 255, 0.025);
+
+  background-size: 220% 100%, 100% 100%;
+
+  animation: imageShimmer 1.6s linear infinite;
+}
+
+@keyframes imageShimmer {
+  from {
+    background-position: 160% 0, 0 0;
+  }
+
+  to {
+    background-position: -60% 0, 0 0;
+  }
+}
+
+.generated-image-caption {
+  margin: 10px 2px 0;
+
+  color: var(--text-secondary);
+
+  font-size: 13px;
+  line-height: 1.55;
+
+  overflow-wrap: anywhere;
+}
+
+.generated-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+
+  margin-top: 8px;
+}
+
+
+/* =========================================================
+   ACTION BUTTONS (shared by image card, pending, error)
+   ========================================================= */
+
+.image-action-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  /* 32px tall = comfortable touch target without looking heavy */
+  min-height: 32px;
+
+  padding: 5px 10px;
+
+  border: none;
+  border-radius: 8px;
+
+  /* never wrap "Try again" / "Regenerate" onto two lines */
+  white-space: nowrap;
+  flex: 0 0 auto;
+
+  color: #8b8b96;
+
+  background: transparent;
+
+  font-size: 12px;
+
+  cursor: pointer;
+
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    transform 140ms ease;
+}
+
+.image-action-button:hover:not(:disabled) {
+  color: #d4d4db;
+
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.image-action-button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.image-action-button:disabled {
+  cursor: not-allowed;
+
+  opacity: 0.45;
+}
+
+.image-action-button:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 1px;
+}
+
+
+/* =========================================================
+   PENDING (while the image is being created)
+   ========================================================= */
+
+.image-pending {
+  width: var(--image-card-width);
+
+  overflow: hidden;
+
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+
+  background: var(--surface-strong);
+
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.32);
+}
+
+.image-pending-art {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  aspect-ratio: 1 / 1;
+
+  overflow: hidden;
+
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      rgba(99, 102, 241, 0.16),
+      transparent 62%
+    );
+}
+
+.image-pending-icon {
+  position: relative;
+
+  display: flex;
+
+  color: var(--accent-bright);
+
+  animation: imageIconPulse 2.2s ease-in-out infinite;
+}
+
+@keyframes imageIconPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+.image-pending-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding: 10px 12px 10px 16px;
+
+  border-top: 1px solid var(--border);
+}
+
+.image-pending-text {
+  display: flex;
+  flex-direction: column;
+
+  min-width: 0;
+}
+
+.image-pending-title {
+  color: #e4e4e9;
+
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.image-pending-meta {
+  color: var(--text-muted);
+
+  font-size: 11px;
+
+  font-variant-numeric: tabular-nums;
+}
+
+
+/* =========================================================
+   ERROR / CANCELLED
+   ========================================================= */
+
+.image-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  width: var(--image-card-width);
+
+  padding: 12px 12px 12px 14px;
+
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  border-radius: 14px;
+
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.image-error.is-cancelled {
+  border-color: var(--border-strong);
+
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.image-error-icon {
+  display: flex;
+
+  flex: 0 0 auto;
+
+  color: #f87171;
+}
+
+.image-error.is-cancelled .image-error-icon {
+  color: var(--text-muted);
+}
+
+.image-error-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+
+  min-width: 0;
+}
+
+.image-error-title {
+  color: #ececf1;
+
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.image-error-message {
+  color: var(--text-secondary);
+
+  font-size: 12px;
+  line-height: 1.5;
+
+  overflow-wrap: anywhere;
+}
+
+
+/* =========================================================
+   LIGHTBOX
+   ========================================================= */
+
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+
+  z-index: 1000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 64px 20px 20px;
+
+  background: rgba(3, 3, 6, 0.9);
+
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+
+  cursor: zoom-out;
+
+  animation: lightboxIn 180ms ease both;
+}
+
+@keyframes lightboxIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.image-lightbox-toolbar {
+  position: absolute;
+
+  top: 12px;
+  right: 14px;
+
+  display: flex;
+  gap: 8px;
+}
+
+.image-lightbox-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+
+  height: 40px;
+
+  padding: 0 14px;
+
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+
+  color: #e4e4e9;
+
+  background: rgba(255, 255, 255, 0.07);
+
+  font-size: 13px;
+
+  cursor: pointer;
+
+  transition: background 160ms ease;
+}
+
+.image-lightbox-button.icon-only {
+  width: 40px;
+
+  padding: 0;
+}
+
+.image-lightbox-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.image-lightbox-button:disabled {
+  opacity: 0.55;
+
+  cursor: wait;
+}
+
+.image-lightbox-button:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+}
+
+.image-lightbox-image {
+  display: block;
+
+  max-width: min(100%, 1400px);
+  max-height: 100%;
+
+  object-fit: contain;
+
+  border-radius: 10px;
+
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+
+  cursor: default;
+}
+
+
+/* =========================================================
+   SMALL SCREENS
+   ========================================================= */
+
+@media (max-width: 640px) {
+  .generated-image,
+  .image-pending,
+  .image-error {
+    --image-card-width: 100%;
+  }
+
+  .image-error {
+    flex-wrap: wrap;
+  }
+
+  .image-lightbox {
+    padding: 60px 8px 8px;
+  }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .generated-image-skeleton,
+  .image-pending-shimmer,
+  .image-pending-icon,
+  .image-lightbox {
+    animation: none;
+  }
+
+  .generated-image-frame img {
+    transition: none;
+  }
+}

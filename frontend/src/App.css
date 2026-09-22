@@ -35,6 +35,18 @@
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
+  /* Display serif — reserved for a handful of real headline moments
+     (brand name, chat title, empty-state hero). Everything else stays
+     on the original system sans stack below, since that's what keeps
+     buttons/labels/messages legible at small sizes. */
+  --font-display:
+    ui-serif,
+    Georgia,
+    Cambria,
+    "Times New Roman",
+    Times,
+    serif;
+
   font-family:
     -apple-system,
     BlinkMacSystemFont,
@@ -53,6 +65,8 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+
 
 
 /* =========================================================
@@ -3290,4 +3304,171 @@ button:focus-visible {
 
     transition-duration: 0.01ms !important;
   }
+}
+
+
+/* =========================================================
+   TYPOGRAPHY + MICRO-ANIMATION LAYER (appended last on purpose —
+   these rules intentionally win the cascade over the base component
+   rules above, without needing !important)
+   ========================================================= */
+
+/* =========================================================
+   HEADLINE MOMENTS — display serif + gradient, used sparingly:
+   sidebar brand, chat header title, empty-state hero only.
+   ========================================================= */
+
+@keyframes headlineIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sidebar-brand h2,
+.brand h1,
+.empty-state-title {
+  font-family: var(--font-display);
+  background: linear-gradient(
+    120deg,
+    var(--accent-bright),
+    var(--accent) 55%,
+    var(--accent-secondary)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: headlineIn 0.4s var(--ease-out);
+}
+
+.sidebar-brand h2 {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.brand h1 {
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  transition: opacity 0.2s var(--ease-out);
+}
+
+.empty-state-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Taglines under the headline moments — small caps, tracked, quiet */
+.sidebar-brand span,
+.brand p {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+/* "Online" status pill — tightened + tracked to read as a label, not prose */
+.status span {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Section labels (PINNED / TODAY / YESTERDAY) — refined tracking */
+.conversation-section-label,
+.conversation-heading {
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+
+/* Conversation list — subtle hover/active motion instead of a hard cut */
+.conversation-item {
+  transition:
+    background-color 0.18s var(--ease-out),
+    transform 0.18s var(--ease-out);
+}
+
+.conversation-item:hover {
+  transform: translateX(2px);
+}
+
+.conversation-title {
+  font-weight: 500;
+  transition: color 0.18s var(--ease-out);
+}
+
+.conversation-item.active .conversation-title {
+  font-weight: 700;
+  color: var(--accent-bright);
+}
+
+/* Context menu (Pin / Rename / Delete) — crisper weight + a soft entrance */
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.conversation-menu {
+  animation: menuIn 0.15s var(--ease-out);
+}
+
+.conversation-menu-item {
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  transition:
+    background-color 0.15s var(--ease-out),
+    padding-left 0.15s var(--ease-out);
+}
+
+.conversation-menu-item:hover {
+  padding-left: 4px;
+}
+
+.conversation-menu-item.delete {
+  font-weight: 600;
+}
+
+/* Upload / document rows — slightly bolder file names, quiet metadata */
+.documents-dropzone-title {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.document-row-name {
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+/* Buttons — small lift + shadow on hover instead of a static state */
+.new-chat-button,
+.documents-button,
+.send-button,
+.mic-button,
+.image-toggle-button {
+  transition:
+    transform 0.15s var(--ease-out),
+    box-shadow 0.15s var(--ease-out),
+    background-color 0.15s var(--ease-out);
+}
+
+.new-chat-button:hover:not(:disabled),
+.documents-button:hover,
+.send-button:hover:not(:disabled) {
+  transform: translateY(-1px);
 }

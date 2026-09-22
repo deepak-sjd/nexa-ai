@@ -40,6 +40,16 @@ class Message(Base):
         nullable=True,
     )
 
+    # Filename (never a path) of a generated image stored under
+    # settings.generated_images_dir. Null for text-only messages.
+    # The image itself is NOT kept in `content`: base64 in a text
+    # column bloats every history query and, worse, ends up in the
+    # LLM prompt.
+    image_filename: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,

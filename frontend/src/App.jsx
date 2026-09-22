@@ -3,8 +3,17 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import mermaid from "mermaid";
 import "./App.css";
+import "./ImageGeneration.css";
 
-const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
+import { API_BASE_URL } from "./services/api";
+import { useImageGeneration } from "./hooks/useImageGeneration";
+import { normalizeHistory, parseImageCommand } from "./utils/imageMessage";
+import GeneratedImage from "./components/GeneratedImage";
+import {
+  ImageErrorCard,
+  ImageGeneratingCard,
+} from "./components/ImageStatusCards";
+import { ImageIcon } from "./components/ImageIcons";
 
 const USER_ID = 1;
 
@@ -276,6 +285,18 @@ const EXAMPLE_PROMPTS = [
     prompt:
       "Summarize the difference between embeddings and reranking.",
   },
+  {
+    label: "Create an image",
+    prompt:
+      "A serene mountain lake at sunrise, soft watercolor style",
+    mode: "image",
+  },
+  {
+    label: "Design a logo",
+    prompt:
+      "A minimal logo for a coffee shop called Ember, flat vector, warm colors",
+    mode: "image",
+  },
 ];
 
 function EmptyState({ onPromptClick }) {
@@ -290,9 +311,9 @@ function EmptyState({ onPromptClick }) {
       </h1>
 
       <p className="empty-state-subtitle">
-        Ask a question, upload a document, or request a
-        diagram — NEXA AI grounds its answers in what it
-        actually knows.
+        Ask a question, upload a document, request a
+        diagram, or create an image — NEXA AI grounds its
+        answers in what it actually knows.
       </p>
 
       <div className="empty-state-prompts">
@@ -301,7 +322,7 @@ function EmptyState({ onPromptClick }) {
             key={item.label}
             type="button"
             className="empty-state-prompt-card"
-            onClick={() => onPromptClick(item.prompt)}
+            onClick={() => onPromptClick(item.prompt, item.mode)}
           >
             {item.label}
           </button>
@@ -367,6 +388,11 @@ function App() {
   const [speakingMessageId, setSpeakingMessageId] =
     useState(null);
 
+  // When on, the next message is sent to the image endpoint
+  // instead of the chat endpoint. One-shot: it switches itself
+  // off after sending so a stray Enter never costs an image.
+  const [imageMode, setImageMode] = useState(false);
+
   // ============================================================
   // REFS
   // ============================================================
@@ -380,6 +406,21 @@ function App() {
   const textareaRef = useRef(null);
 
   const conversationCreatedRef = useRef(false);
+
+  // ============================================================
+  // IMAGE GENERATION
+  // ============================================================
+
+  const {
+    generate: generateImage,
+    cancel: cancelImageGeneration,
+    retry: retryImageGeneration,
+  } = useImageGeneration({
+    conversationId,
+    setMessages,
+    setLoading,
+    onConversationUpdate: applyConversationTitleUpdate,
+  });
 
   // ============================================================
   // AUTO SCROLL
@@ -647,11 +688,8 @@ function App() {
 
       const data = await response.json();
 
-      console.log(
-        "Loaded conversation messages:",
-        conversationIdToLoad,
-        data
-      );
+      // (Deliberately not logging `data` — image messages can be
+      // megabytes and would flood the console.)
 
       // --------------------------------------------------------
       // Backend must return an array
@@ -696,16 +734,9 @@ function App() {
       // Load existing messages
       // --------------------------------------------------------
 
-      const historyMessages = data.map(
-        (message) => ({
-          id: message.id,
-          role: message.role,
-          content: message.content || "",
-          sources: message.sources || null,
-        })
-      );
-
-      setMessages(historyMessages);
+      // normalizeHistory also pulls generated images out of
+      // message content and attaches each image's prompt.
+      setMessages(normalizeHistory(data));
     } catch (error) {
       console.error(
         "Conversation history loading error:",
@@ -1215,7 +1246,9 @@ function App() {
   // AUTO RESIZE TEXTAREA
   // ============================================================
 
-  function handleExamplePromptClick(promptText) {
+  function handleExamplePromptClick(promptText, mode) {
+    setImageMode(mode === "image");
+
     setInput(promptText);
 
     requestAnimationFrame(() => {
@@ -1265,6 +1298,18 @@ function App() {
     }
 
     textarea.style.height = "auto";
+  }
+
+  // ============================================================
+  // KEEP THE CHAT PINNED TO THE BOTTOM AFTER AN IMAGE LOADS
+  // (its final height isn't known until then)
+  // ============================================================
+
+  function handleImageLoaded() {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "auto",
+      block: "end",
+    });
   }
 
   // ============================================================
@@ -1476,14 +1521,47 @@ function App() {
       return;
     }
 
+    // ========================================================
+    // IMAGE REQUEST ("image mode" toggle or /image command)
+    // ========================================================
+
+    const imageCommand = parseImageCommand(text);
+
+    if (imageMode || imageCommand) {
+      const imagePrompt = imageCommand ? imageCommand.prompt : text;
+
+      setInput("");
+
+      resetTextarea();
+
+      if (!imagePrompt) {
+        // A bare "/image" just switches the composer to image mode.
+        setImageMode(true);
+
+        return;
+      }
+
+      stopSpeaking();
+
+      setImageMode(false);
+
+      generateImage(imagePrompt);
+
+      return;
+    }
+
     stopSpeaking();
 
     // ========================================================
     // USER MESSAGE
     // ========================================================
 
+    const userClientId = `user-${Date.now()}`;
+
     const userMessage = {
-      id: `user-${Date.now()}`,
+      id: userClientId,
+      // Stable React key — `id` gets replaced by the server id.
+      clientId: userClientId,
       role: "user",
       content: text,
     };
@@ -1510,6 +1588,7 @@ function App() {
       ...previous,
       {
         id: assistantId,
+        clientId: assistantId,
         role: "assistant",
         content: "",
       },
@@ -1859,6 +1938,10 @@ function App() {
   // ============================================================
   // CURRENT CONVERSATION
   // ============================================================
+
+  const isCreatingImage = messages.some(
+    (message) => message.kind === "image-pending"
+  );
 
   const currentConversation =
     conversations.find(
@@ -2310,7 +2393,7 @@ function App() {
 
                 return (
                   <div
-                    key={message.id}
+                    key={message.clientId ?? message.id}
                     className={`message-row ${
                       isUser
                         ? "user-row"
@@ -2353,7 +2436,41 @@ function App() {
                       >
 
                         {isAssistant ? (
-                          message.content ? (
+                          message.kind === "image-pending" ? (
+                            <ImageGeneratingCard
+                              startedAt={message.startedAt}
+                              onCancel={cancelImageGeneration}
+                            />
+                          ) : message.kind === "image-error" ? (
+                            <ImageErrorCard
+                              message={message.error}
+                              cancelled={message.cancelled}
+                              retryDisabled={loading}
+                              onRetry={() =>
+                                retryImageGeneration(
+                                  message.clientId,
+                                  message.prompt
+                                )
+                              }
+                            />
+                          ) : message.image ? (
+                            <GeneratedImage
+                              src={message.image.src}
+                              prompt={message.image.prompt}
+                              caption={message.content}
+                              onRegenerate={generateImage}
+                              regenerateDisabled={loading}
+                              // Only freshly generated images (which
+                              // have a clientId) re-scroll on load;
+                              // history images lazy-load as you
+                              // scroll up and must not yank the view.
+                              onLoad={
+                                message.clientId
+                                  ? handleImageLoaded
+                                  : undefined
+                              }
+                            />
+                          ) : message.content ? (
                             <div className="markdown-content">
 
                               <ReactMarkdown
@@ -2502,6 +2619,7 @@ function App() {
 
                       {isAssistant &&
                         message.content &&
+                        !message.image &&
                         !isStreaming && (
                           <div className="message-actions">
                             <button
@@ -2584,7 +2702,7 @@ function App() {
               )
             )}
 
-            <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} className="chat-end-anchor" />
 
           </div>
 
@@ -2606,6 +2724,8 @@ function App() {
               placeholder={
                 isListening
                   ? "Listening..."
+                  : imageMode
+                  ? "Describe the image you want to create..."
                   : conversationId
                   ? "Ask NEXA AI anything..."
                   : "Connecting to NEXA AI..."
@@ -2613,6 +2733,24 @@ function App() {
               rows="1"
               disabled={!conversationId}
             />
+
+            <button
+              type="button"
+              className="image-toggle-button"
+              onClick={() => setImageMode((current) => !current)}
+              aria-pressed={imageMode}
+              disabled={!conversationId || loading}
+              aria-label={
+                imageMode ? "Turn off image mode" : "Create an image"
+              }
+              title={
+                imageMode
+                  ? "Image mode on — click to turn off"
+                  : "Create an image"
+              }
+            >
+              <ImageIcon />
+            </button>
 
             {speechSupported && (
               <button
@@ -2645,7 +2783,7 @@ function App() {
                 !input.trim() ||
                 !conversationId
               }
-              aria-label="Send message"
+              aria-label={imageMode ? "Create image" : "Send message"}
             >
               ➤
             </button>
@@ -2654,9 +2792,20 @@ function App() {
 
           <p className="input-hint">
 
-            {loading
-              ? "NEXA AI is generating a response..."
-              : "Enter to send • Shift + Enter for a new line"}
+            {loading ? (
+              isCreatingImage ? (
+                "Creating your image..."
+              ) : (
+                "NEXA AI is generating a response..."
+              )
+            ) : imageMode ? (
+              <>
+                <span className="input-hint-mode">Image mode</span>
+                {" • Enter to create • Shift + Enter for a new line"}
+              </>
+            ) : (
+              "Enter to send • Shift + Enter for a new line • /image to create an image"
+            )}
 
           </p>
 

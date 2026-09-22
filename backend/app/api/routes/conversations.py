@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.user import User
 from app.models.conversation import Conversation
+from app.models.message import Message
+from app.services.image_storage import delete_image_files
 
 from app.schemas.conversation import (
     ConversationCreate,
@@ -196,8 +198,24 @@ def delete_conversation(
             detail="Conversation not found",
         )
 
+    # Remember which image files belong to this conversation. The
+    # rows are removed by the FK cascade, but the files on disk are
+    # not — without this, "deleted" images would stay reachable by URL.
+    image_filenames = [
+        row[0]
+        for row in db.query(Message.image_filename)
+        .filter(
+            Message.conversation_id == conversation_id,
+            Message.image_filename.isnot(None),
+        )
+        .all()
+    ]
+
     db.delete(conversation)
     db.commit()
+
+    # After the commit, so a failed delete never loses images.
+    delete_image_files(image_filenames)
 
     return {
         "message": "Conversation deleted successfully",

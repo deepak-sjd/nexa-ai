@@ -1,3 +1,4 @@
+import re
 import time
 from pathlib import Path
 
@@ -22,6 +23,39 @@ router = APIRouter(
     prefix="/conversations",
     tags=["Messages"],
 )
+
+
+# Matches a markdown image whose source is an inline base64 data URI
+# (how the first version of image generation stored images).
+_INLINE_IMAGE = re.compile(r"!\[[^\]]*\]\(data:image/[^)]*\)")
+
+IMAGE_HISTORY_NOTE = "[The assistant generated an image for the user.]"
+
+
+def history_text(message: Message) -> str:
+    """
+    The text of a stored message as the LLM should see it.
+
+    Images must never reach the model as text: a base64 image is
+    megabytes of characters, which would blow the context window and
+    the bill on the very next chat turn. Image messages are replaced
+    by their caption (if any) plus a short note. The prompt that
+    produced the image is the user message right before it, so the
+    model still has the context.
+    """
+
+    content = message.content or ""
+
+    removed_inline_images = 0
+
+    # Cheap substring check first: most messages skip the regex.
+    if "data:image/" in content:
+        content, removed_inline_images = _INLINE_IMAGE.subn("", content)
+
+    if message.image_filename or removed_inline_images:
+        return f"{content.strip()}\n{IMAGE_HISTORY_NOTE}".strip()
+
+    return message.content or ""
 
 
 def extract_sources(
@@ -196,7 +230,7 @@ def create_message(
     conversation_history = [
         {
             "role": message.role,
-            "content": message.content,
+            "content": history_text(message),
         }
         for message in previous_messages
     ]
@@ -345,7 +379,7 @@ def create_message_stream(
     conversation_history = [
         {
             "role": message.role,
-            "content": message.content,
+            "content": history_text(message),
         }
         for message in previous_messages
     ]
