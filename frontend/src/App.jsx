@@ -1502,8 +1502,10 @@ function App() {
   // SEND MESSAGE
   // ============================================================
 
-  async function sendMessage() {
-    const text = input.trim();
+  async function sendMessage(overrideText) {
+    const isRetry = overrideText !== undefined;
+
+    const text = (isRetry ? overrideText : input).trim();
 
     if (!text) {
       return;
@@ -1571,9 +1573,11 @@ function App() {
       userMessage,
     ]);
 
-    setInput("");
+    if (!isRetry) {
+      setInput("");
 
-    resetTextarea();
+      resetTextarea();
+    }
 
     setLoading(true);
 
@@ -1909,8 +1913,11 @@ function App() {
               assistantId
                 ? {
                     ...message,
-                    content:
-                      "Sorry, I couldn't process your request. Please try again.",
+                    content: "",
+                    kind: "chat-error",
+                    error:
+                      "Sorry, I couldn't get a response. Please try again.",
+                    prompt: text,
                   }
                 : message
           )
@@ -1918,6 +1925,37 @@ function App() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // ============================================================
+  // RETRY A FAILED CHAT MESSAGE
+  // (mirrors retryImageGeneration: drop the failed pair, resend)
+  // ============================================================
+
+  function retryChatMessage(failedClientId, promptText) {
+    setMessages((previous) => {
+      const index = previous.findIndex(
+        (message) => message.clientId === failedClientId
+      );
+
+      if (index === -1) {
+        return previous;
+      }
+
+      const promptBubble = previous[index - 1];
+
+      const dropPromptBubble =
+        promptBubble?.role === "user" &&
+        promptBubble.content === promptText;
+
+      return previous.filter(
+        (_, position) =>
+          position !== index &&
+          !(dropPromptBubble && position === index - 1)
+      );
+    });
+
+    sendMessage(promptText);
   }
 
   // ============================================================
@@ -2436,7 +2474,19 @@ function App() {
                       >
 
                         {isAssistant ? (
-                          message.kind === "image-pending" ? (
+                          message.kind === "chat-error" ? (
+                            <ImageErrorCard
+                              title="Couldn't get a response"
+                              message={message.error}
+                              retryDisabled={loading}
+                              onRetry={() =>
+                                retryChatMessage(
+                                  message.clientId,
+                                  message.prompt
+                                )
+                              }
+                            />
+                          ) : message.kind === "image-pending" ? (
                             <ImageGeneratingCard
                               startedAt={message.startedAt}
                               onCancel={cancelImageGeneration}

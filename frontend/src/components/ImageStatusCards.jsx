@@ -64,6 +64,7 @@ export function ImageErrorCard({
   cancelled = false,
   onRetry,
   retryDisabled = false,
+  title,
 }) {
   return (
     <div
@@ -76,7 +77,7 @@ export function ImageErrorCard({
 
       <div className="image-error-body">
         <span className="image-error-title">
-          {cancelled ? "Cancelled" : "Couldn't create the image"}
+          {title || (cancelled ? "Cancelled" : "Couldn't create the image")}
         </span>
 
         <span className="image-error-message">{message}</span>
