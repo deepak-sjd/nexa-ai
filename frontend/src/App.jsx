@@ -14,6 +14,7 @@ import {
   ImageGeneratingCard,
 } from "./components/ImageStatusCards";
 import { ImageIcon } from "./components/ImageIcons";
+import { MoonIcon, SparkleThemeIcon } from "./components/ThemeIcons";
 
 const USER_ID = 1;
 
@@ -392,6 +393,36 @@ function App() {
   // instead of the chat endpoint. One-shot: it switches itself
   // off after sending so a stray Enter never costs an image.
   const [imageMode, setImageMode] = useState(false);
+
+  // ============================================================
+  // THEME
+  // ============================================================
+  // "dark" (default, current look) or "vibrant". Read synchronously
+  // from localStorage so the very first render already has the
+  // right theme — no flash of the wrong one.
+  const [theme, setTheme] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem("nexa-theme");
+      return stored === "vibrant" ? "vibrant" : "dark";
+    } catch {
+      return "dark";
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+
+    try {
+      window.localStorage.setItem("nexa-theme", theme);
+    } catch {
+      // Private browsing / storage disabled — theme just won't
+      // persist across reloads, not worth surfacing to the user.
+    }
+  }, [theme]);
+
+  function cycleTheme() {
+    setTheme((current) => (current === "dark" ? "vibrant" : "dark"));
+  }
 
   // ============================================================
   // REFS
@@ -2381,13 +2412,27 @@ function App() {
 
           </div>
 
-          <div className="status">
+          <div className="header-right">
 
-            <span className="status-dot" />
+            <button
+              type="button"
+              className="theme-toggle-button"
+              onClick={cycleTheme}
+              aria-label={`Theme: ${theme}. Click to switch.`}
+              title={`Theme: ${theme === "dark" ? "Midnight" : "Vibrant"} — click to switch`}
+            >
+              {theme === "dark" ? <MoonIcon /> : <SparkleThemeIcon />}
+            </button>
 
-            <span>
-              Online
-            </span>
+            <div className="status">
+
+              <span className="status-dot" />
+
+              <span>
+                Online
+              </span>
+
+            </div>
 
           </div>
 

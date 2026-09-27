@@ -28,24 +28,23 @@
 
   /* Used sparingly — one or two spots, not everywhere */
   --accent-secondary: #c264e0;
+  --accent-mid: #6d67f4;
+  --accent-light: #a5a1ff;
+
+  /* R,G,B triples (no alpha) so rules that need a translucent
+     accent can do rgba(var(--accent-rgb), 0.12) etc. */
+  --accent-rgb: 99, 102, 241;
+  --accent-dark-rgb: 79, 70, 229;
+  --accent-bright-rgb: 131, 125, 255;
+  --accent-secondary-rgb: 194, 100, 224;
+  --accent-mid-rgb: 109, 103, 244;
+  --accent-light-rgb: 165, 161, 255;
 
   --success: #30d158;
 
   --content-width: 1120px;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-
-  /* Display serif — reserved for a handful of real headline moments
-     (brand name, chat title, empty-state hero). Everything else stays
-     on the original system sans stack below, since that's what keeps
-     buttons/labels/messages legible at small sizes. */
-  --font-display:
-    ui-serif,
-    Georgia,
-    Cambria,
-    "Times New Roman",
-    Times,
-    serif;
 
   font-family:
     -apple-system,
@@ -67,6 +66,31 @@
 }
 
 
+/* =========================================================
+   THEME: VIBRANT
+   Same dark background/text/contrast as the default theme —
+   only the accent palette changes, so this stays low-risk:
+   every rule that already reads var(--accent…) picks this up
+   automatically, nothing else needed.
+   ========================================================= */
+
+[data-theme="vibrant"] {
+  --accent: #8b5cf6;
+  --accent-dark: #d946ef;
+  --accent-bright: #f472b6;
+  --accent-secondary: #22d3ee;
+  --accent-mid: #a78bfa;
+  --accent-light: #f0abfc;
+
+  --accent-rgb: 139, 92, 246;
+  --accent-dark-rgb: 217, 70, 239;
+  --accent-bright-rgb: 244, 114, 182;
+  --accent-secondary-rgb: 34, 211, 238;
+  --accent-mid-rgb: 167, 139, 250;
+  --accent-light-rgb: 240, 171, 252;
+
+  --success: #34e0a1;
+}
 
 
 /* =========================================================
@@ -94,12 +118,12 @@ body {
   background:
     radial-gradient(
       circle at 75% 0%,
-      rgba(99, 102, 241, 0.1),
+      rgba(var(--accent-rgb), 0.1),
       transparent 32%
     ),
     radial-gradient(
       circle at 10% 85%,
-      rgba(194, 100, 224, 0.045),
+      rgba(var(--accent-secondary-rgb), 0.045),
       transparent 30%
     ),
     var(--bg);
@@ -214,7 +238,7 @@ textarea {
   background:
     radial-gradient(
       circle,
-      rgba(99, 102, 241, 0.16),
+      rgba(var(--accent-rgb), 0.16),
       transparent 70%
     );
 
@@ -266,8 +290,8 @@ textarea {
   background:
     linear-gradient(
       145deg,
-      #6d67f4,
-      #4f46e5
+      var(--accent-mid),
+      var(--accent-dark)
     );
 
   animation: logoGlow 4.5s ease-in-out infinite;
@@ -277,13 +301,13 @@ textarea {
   0%,
   100% {
     box-shadow:
-      0 7px 22px rgba(79, 70, 229, 0.28);
+      0 7px 22px rgba(var(--accent-dark-rgb), 0.28);
   }
 
   50% {
     box-shadow:
-      0 7px 26px rgba(109, 103, 244, 0.45),
-      0 0 18px rgba(194, 100, 224, 0.18);
+      0 7px 26px rgba(var(--accent-mid-rgb), 0.45),
+      0 0 18px rgba(var(--accent-secondary-rgb), 0.18);
   }
 }
 
@@ -370,9 +394,9 @@ textarea {
 }
 
 .new-chat-button:hover:not(:disabled) {
-  background: rgba(99, 102, 241, 0.12);
+  background: rgba(var(--accent-rgb), 0.12);
 
-  border-color: rgba(99, 102, 241, 0.25);
+  border-color: rgba(var(--accent-rgb), 0.25);
 
   transform: translateY(-1px);
 }
@@ -595,7 +619,7 @@ textarea {
 
   background: rgba(124, 118, 255, 0.06);
 
-  color: #a5a1ff;
+  color: var(--accent-light);
 }
 
 .documents-dropzone.uploading {
@@ -687,7 +711,7 @@ textarea {
 
   border-radius: 9px;
 
-  color: #a5a1ff;
+  color: var(--accent-light);
 
   background: rgba(124, 118, 255, 0.12);
 }
@@ -793,8 +817,8 @@ textarea {
   background:
     linear-gradient(
       145deg,
-      #6d67f4,
-      #4f46e5
+      var(--accent-mid),
+      var(--accent-dark)
     );
 
   font-size: 17px;
@@ -850,7 +874,7 @@ textarea {
 }
 
 .sidebar-search-input:focus {
-  border-color: rgba(109, 103, 244, 0.5);
+  border-color: rgba(var(--accent-mid-rgb), 0.5);
 
   background: rgba(255, 255, 255, 0.045);
 }
@@ -1060,7 +1084,7 @@ textarea {
 }
 
 .conversation-item.active .conversation-icon {
-  color: #a5a1ff;
+  color: var(--accent-light);
 }
 
 .conversation-title {
@@ -1260,23 +1284,23 @@ textarea {
 
   padding: 8px 10px;
 
-  border: 1px solid rgba(99, 102, 241, 0.45);
+  border: 1px solid rgba(var(--accent-rgb), 0.45);
   border-radius: 8px;
 
   outline: none;
 
   color: #f5f5f7;
 
-  background: rgba(99, 102, 241, 0.08);
+  background: rgba(var(--accent-rgb), 0.08);
 
   font-size: 12px;
 }
 
 .conversation-edit-input:focus {
-  border-color: rgba(99, 102, 241, 0.7);
+  border-color: rgba(var(--accent-rgb), 0.7);
 
   box-shadow:
-    0 0 0 3px rgba(99, 102, 241, 0.08);
+    0 0 0 3px rgba(var(--accent-rgb), 0.08);
 }
 
 
@@ -1488,8 +1512,8 @@ textarea {
   background:
     linear-gradient(
       145deg,
-      #6d67f4,
-      #4f46e5
+      var(--accent-mid),
+      var(--accent-dark)
     );
 
   border: 1px solid rgba(255, 255, 255, 0.13);
@@ -1507,7 +1531,7 @@ textarea {
     animation: none;
 
     box-shadow:
-      0 8px 28px rgba(79, 70, 229, 0.28),
+      0 8px 28px rgba(var(--accent-dark-rgb), 0.28),
       inset 0 1px 0 rgba(255, 255, 255, 0.2);
   }
 }
@@ -1549,6 +1573,59 @@ textarea {
 /* =========================================================
    ONLINE STATUS
    ========================================================= */
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.theme-toggle-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 38px;
+  height: 38px;
+
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+
+  color: var(--text-secondary);
+
+  background: rgba(255, 255, 255, 0.03);
+
+  cursor: pointer;
+
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.theme-toggle-button:hover {
+  color: var(--text);
+
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.theme-toggle-button:active {
+  transform: scale(0.92);
+}
+
+.theme-toggle-button:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+}
+
+[data-theme="vibrant"] .theme-toggle-button {
+  color: var(--accent-light);
+
+  border-color: rgba(var(--accent-rgb), 0.4);
+
+  background: rgba(var(--accent-rgb), 0.1);
+}
 
 .status {
   display: flex;
@@ -1652,7 +1729,7 @@ textarea {
   background:
     radial-gradient(
       circle at 72% 0%,
-      rgba(99, 102, 241, 0.04),
+      rgba(var(--accent-rgb), 0.04),
       transparent 30%
     );
 }
@@ -1749,7 +1826,7 @@ textarea {
     linear-gradient(
       145deg,
       #7a74f7,
-      #4f46e5 60%,
+      var(--accent-dark) 60%,
       #9349c9
     );
 
@@ -1921,15 +1998,15 @@ textarea {
   background:
     linear-gradient(
       145deg,
-      #6d67f4,
-      #4f46e5
+      var(--accent-mid),
+      var(--accent-dark)
     );
 
   border: 1px solid rgba(255, 255, 255, 0.13);
 
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 7px 20px rgba(79, 70, 229, 0.22);
+    0 7px 20px rgba(var(--accent-dark-rgb), 0.22);
 
   transition: box-shadow 300ms ease;
 }
@@ -1953,14 +2030,14 @@ textarea {
   background:
     linear-gradient(
       145deg,
-      #6d67f4,
-      #4f46e5
+      var(--accent-mid),
+      var(--accent-dark)
     );
 
   border: 1px solid rgba(255, 255, 255, 0.11);
 
   box-shadow:
-    0 8px 24px rgba(79, 70, 229, 0.25);
+    0 8px 24px rgba(var(--accent-dark-rgb), 0.25);
 }
 
 
@@ -2073,8 +2150,8 @@ textarea {
   background:
     linear-gradient(
       150deg,
-      rgba(109, 103, 244, 0.98),
-      rgba(79, 70, 229, 0.97) 55%,
+      rgba(var(--accent-mid-rgb), 0.98),
+      rgba(var(--accent-dark-rgb), 0.97) 55%,
       rgba(147, 73, 201, 0.92)
     );
 
@@ -2083,7 +2160,7 @@ textarea {
   border-top-right-radius: 7px;
 
   box-shadow:
-    0 12px 34px rgba(79, 70, 229, 0.19);
+    0 12px 34px rgba(var(--accent-dark-rgb), 0.19);
 }
 
 
@@ -2191,9 +2268,9 @@ textarea {
 }
 
 .markdown-content a:hover {
-  color: #aaa8ff;
+  color: var(--accent-light);
 
-  text-decoration-color: #aaa8ff;
+  text-decoration-color: var(--accent-light);
 }
 
 
@@ -2347,7 +2424,7 @@ textarea {
 
   border-left:
     3px solid
-    rgba(99, 102, 241, 0.6);
+    rgba(var(--accent-rgb), 0.6);
 }
 
 
@@ -2421,7 +2498,7 @@ textarea {
     linear-gradient(
       145deg,
       #8b85ff,
-      #6366f1
+      var(--accent)
     );
 
   animation:
@@ -2465,7 +2542,7 @@ textarea {
 
   margin-left: 2px;
 
-  color: #aaa8ff;
+  color: var(--accent-light);
 
   font-weight: 600;
 
@@ -2599,7 +2676,7 @@ textarea {
 .speak-button.speaking {
   color: var(--accent-bright);
 
-  background: rgba(99, 102, 241, 0.12);
+  background: rgba(var(--accent-rgb), 0.12);
 }
 
 
@@ -2619,9 +2696,9 @@ textarea {
   width: 100%;
 
   padding:
-    12px
+    18px
     24px
-    16px;
+    20px;
 
   background:
     linear-gradient(
@@ -2649,17 +2726,17 @@ textarea {
     var(--content-width)
   );
 
-  min-height: 44px;
+  min-height: 56px;
 
   margin: 0 auto;
 
-  gap: 8px;
+  gap: 10px;
 
   padding:
-    6px
-    6px
-    6px
-    16px;
+    8px
+    8px
+    8px
+    20px;
 
   border: 1px solid rgba(255, 255, 255, 0.10);
 
@@ -2707,13 +2784,13 @@ textarea {
 
   width: 100%;
 
-  min-height: 30px;
+  min-height: 40px;
   max-height: 150px;
 
   padding:
-    6px
+    9px
     10px
-    6px
+    8px
     0;
 
   border: 0;
@@ -2730,7 +2807,7 @@ textarea {
 
   font-size: 15px;
 
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .input-container textarea::placeholder {
@@ -2755,13 +2832,13 @@ textarea {
   align-items: center;
   justify-content: center;
 
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
 
-  flex: 0 0 34px;
+  flex: 0 0 40px;
 
   border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 12px;
+  border-radius: 14px;
 
   color: #9a9ba8;
 
@@ -2842,12 +2919,12 @@ textarea {
   align-items: center;
   justify-content: center;
 
-  width: 36px;
-  height: 36px;
+  width: 42px;
+  height: 42px;
 
-  flex: 0 0 36px;
+  flex: 0 0 42px;
 
-  border-radius: 12px;
+  border-radius: 15px;
 
   color: #ffffff;
 
@@ -2855,7 +2932,7 @@ textarea {
     linear-gradient(
       145deg,
       #7a74f7,
-      #4f46e5 60%,
+      var(--accent-dark) 60%,
       #9349c9
     );
 
@@ -2866,7 +2943,7 @@ textarea {
   cursor: pointer;
 
   box-shadow:
-    0 8px 24px rgba(79, 70, 229, 0.25);
+    0 8px 24px rgba(var(--accent-dark-rgb), 0.25);
 
   transition:
     transform 220ms var(--ease-out),
@@ -2881,7 +2958,7 @@ textarea {
   filter: brightness(1.06);
 
   box-shadow:
-    0 12px 32px rgba(109, 103, 244, 0.4);
+    0 12px 32px rgba(var(--accent-mid-rgb), 0.4);
 }
 
 .send-button:active:not(:disabled) {
@@ -2931,7 +3008,7 @@ textarea:focus,
 button:focus-visible {
   outline:
     2px solid
-    rgba(99, 102, 241, 0.8);
+    rgba(var(--accent-rgb), 0.8);
 
   outline-offset: 3px;
 }
@@ -3304,199 +3381,4 @@ button:focus-visible {
 
     transition-duration: 0.01ms !important;
   }
-}
-
-
-/* =========================================================
-   TYPOGRAPHY + MICRO-ANIMATION LAYER (appended last on purpose —
-   these rules intentionally win the cascade over the base component
-   rules above, without needing !important)
-   ========================================================= */
-
-/* =========================================================
-   HEADLINE MOMENTS — display serif + gradient, used sparingly:
-   sidebar brand, chat header title, empty-state hero only.
-   ========================================================= */
-
-@keyframes headlineIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.sidebar-brand h2,
-.brand h1,
-.empty-state-title {
-  font-family: var(--font-display);
-  background: linear-gradient(
-    120deg,
-    var(--accent-bright),
-    var(--accent) 55%,
-    var(--accent-secondary)
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: headlineIn 0.4s var(--ease-out);
-}
-
-.sidebar-brand h2 {
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-}
-
-.brand h1 {
-  font-size: 21px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  transition: opacity 0.2s var(--ease-out);
-}
-
-.empty-state-title {
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-/* Taglines under the headline moments — small caps, tracked, quiet */
-.sidebar-brand span,
-.brand p {
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  opacity: 0.75;
-}
-
-/* "Online" status pill — tightened + tracked to read as a label, not prose */
-.status span {
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-/* Section labels (PINNED / TODAY / YESTERDAY) — refined tracking */
-.conversation-section-label,
-.conversation-heading {
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  opacity: 0.55;
-}
-
-/* Conversation list — subtle hover/active motion instead of a hard cut */
-.conversation-item {
-  transition:
-    background-color 0.18s var(--ease-out),
-    transform 0.18s var(--ease-out);
-}
-
-.conversation-item:hover {
-  transform: translateX(2px);
-}
-
-.conversation-title {
-  font-weight: 500;
-  transition: color 0.18s var(--ease-out);
-}
-
-.conversation-item.active .conversation-title {
-  font-weight: 700;
-  color: var(--accent-bright);
-}
-
-/* Context menu (Pin / Rename / Delete) — crisper weight + a soft entrance */
-@keyframes menuIn {
-  from {
-    opacity: 0;
-    transform: scale(0.96) translateY(-2px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-.conversation-menu {
-  animation: menuIn 0.15s var(--ease-out);
-}
-
-.conversation-menu-item {
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  transition:
-    background-color 0.15s var(--ease-out),
-    padding-left 0.15s var(--ease-out);
-}
-
-.conversation-menu-item:hover {
-  padding-left: 4px;
-}
-
-.conversation-menu-item.delete {
-  font-weight: 600;
-}
-
-/* Upload / document rows — slightly bolder file names, quiet metadata */
-.documents-dropzone-title {
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.document-row-name {
-  font-weight: 600;
-  letter-spacing: -0.005em;
-}
-
-/* Buttons — small lift + shadow on hover instead of a static state */
-.new-chat-button,
-.documents-button,
-.send-button,
-.mic-button,
-.image-toggle-button {
-  transition:
-    transform 0.15s var(--ease-out),
-    box-shadow 0.15s var(--ease-out),
-    background-color 0.15s var(--ease-out);
-}
-
-.new-chat-button:hover:not(:disabled),
-.documents-button:hover,
-.send-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-/* =========================================================
-   FIX: conversation menu (Pin / Rename / Delete) letting the
-   row text beneath it show through. Every conversation row is
-   `position: relative` with no z-index, so rows below the open
-   menu can paint over it depending on the browser's compositing
-   order. Giving the open row an explicit, much higher z-index —
-   and making the dropdown itself fully opaque — makes it always
-   win, deterministically, regardless of scroll position or which
-   row triggered it.
-   ========================================================= */
-
-.conversation-item {
-  z-index: 0;
-}
-
-.conversation-item:has(.conversation-menu) {
-  z-index: 60;
-}
-
-.conversation-menu {
-  background-color: #191b24;
-  background-image: linear-gradient(
-    160deg,
-    rgba(34, 36, 46, 1),
-    rgba(19, 21, 28, 1)
-  );
 }
