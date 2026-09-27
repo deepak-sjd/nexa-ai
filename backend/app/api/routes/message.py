@@ -237,7 +237,7 @@ def create_message(
 
     retrieval_started_at = time.perf_counter()
 
-    rag_result = rag_service.search(
+    rag_result = rag_service.search_if_relevant(
         query=data.content,
         retrieval_top_k=12,
         rerank_top_k=8,
@@ -249,16 +249,23 @@ def create_message(
         time.perf_counter() - retrieval_started_at
     )
 
-    logger.info(
-        "conversation=%s retrieval_seconds=%.3f "
-        "retrieved_chunks=%d reranked_chunks=%d "
-        "context_chars=%d",
-        conversation_id,
-        retrieval_seconds,
-        len(rag_result.get("retrieved", [])),
-        len(rag_result.get("reranked", [])),
-        len(retrieved_context or ""),
-    )
+    if rag_result.get("skipped"):
+        logger.info(
+            "conversation=%s retrieval skipped (%s)",
+            conversation_id,
+            rag_result.get("skip_reason"),
+        )
+    else:
+        logger.info(
+            "conversation=%s retrieval_seconds=%.3f "
+            "retrieved_chunks=%d reranked_chunks=%d "
+            "context_chars=%d",
+            conversation_id,
+            retrieval_seconds,
+            len(rag_result.get("retrieved", [])),
+            len(rag_result.get("reranked", [])),
+            len(retrieved_context or ""),
+        )
 
     is_first_message = len(previous_messages) == 0
 
@@ -389,7 +396,7 @@ def create_message_stream(
     # ========================================================
     retrieval_started_at = time.perf_counter()
 
-    rag_result = rag_service.search(
+    rag_result = rag_service.search_if_relevant(
         query=data.content,
         retrieval_top_k=12,
         rerank_top_k=8,
@@ -404,16 +411,23 @@ def create_message_stream(
         time.perf_counter() - retrieval_started_at
     )
 
-    logger.info(
-        "conversation=%s retrieval_seconds=%.3f "
-        "retrieved_chunks=%d reranked_chunks=%d "
-        "context_chars=%d",
-        conversation_id,
-        retrieval_seconds,
-        len(rag_result.get("retrieved", [])),
-        len(rag_result.get("reranked", [])),
-        len(retrieved_context or ""),
-    )
+    if rag_result.get("skipped"):
+        logger.info(
+            "conversation=%s retrieval skipped (%s)",
+            conversation_id,
+            rag_result.get("skip_reason"),
+        )
+    else:
+        logger.info(
+            "conversation=%s retrieval_seconds=%.3f "
+            "retrieved_chunks=%d reranked_chunks=%d "
+            "context_chars=%d",
+            conversation_id,
+            retrieval_seconds,
+            len(rag_result.get("retrieved", [])),
+            len(rag_result.get("reranked", [])),
+            len(retrieved_context or ""),
+        )
 
     is_first_message = len(previous_messages) == 0
 

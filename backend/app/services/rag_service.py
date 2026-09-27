@@ -1,6 +1,11 @@
 from typing import Any
 
+from app.core.logging_config import get_logger
 from app.rag.retriever import retriever
+from app.services.retrieval_router import should_retrieve
+
+
+logger = get_logger(__name__)
 from app.rag.reranker import reranker
 from app.rag.context_builder import context_builder
 
@@ -178,6 +183,73 @@ class RAGService:
             "reranked": reranked_results,
             "context": context,
         }
+
+    # ============================================================
+    # SAFE, ROUTED SEARCH (what message.py should call)
+    # ============================================================
+
+    def search_if_relevant(
+        self,
+        query: str,
+        retrieval_top_k: int = 8,
+        rerank_top_k: int = 5,
+    ) -> dict[str, Any]:
+        """
+        Like search(), but:
+
+        1. Skips retrieval entirely for messages that plainly
+           don't need it (greetings, "thanks", etc) or when
+           nothing has been indexed yet — no wasted API call.
+        2. Never lets a retrieval failure (e.g. the embedding
+           API being down) take down the whole chat request:
+           on error, falls back to answering with no document
+           context instead of raising.
+
+        Returns the same shape as search(), plus:
+            "skipped": bool
+            "skip_reason": str | None  — "not_relevant" |
+                "no_documents_indexed" | "retrieval_error" | None
+        """
+
+        empty = {
+            "query": (query or "").strip(),
+            "retrieved": [],
+            "reranked": [],
+            "context": "",
+        }
+
+        if not should_retrieve(query):
+            return {**empty, "skipped": True, "skip_reason": "not_relevant"}
+
+        try:
+            has_documents = self.retriever.vector_store.count() > 0
+        except Exception as e:
+            # Being unable to even check the count shouldn't block
+            # chat either — treat it like any other retrieval error.
+            logger.warning("Could not check vector store count: %s", e)
+            has_documents = True  # fall through to the real search
+
+        if not has_documents:
+            return {
+                **empty,
+                "skipped": True,
+                "skip_reason": "no_documents_indexed",
+            }
+
+        try:
+            result = self.search(
+                query=query,
+                retrieval_top_k=retrieval_top_k,
+                rerank_top_k=rerank_top_k,
+            )
+            return {**result, "skipped": False, "skip_reason": None}
+        except Exception as e:
+            logger.error(
+                "Retrieval failed, answering without document "
+                "context: %s",
+                e,
+            )
+            return {**empty, "skipped": True, "skip_reason": "retrieval_error"}
 
     # ============================================================
     # SIMPLE CONTEXT API
