@@ -2872,7 +2872,7 @@ function App() {
 
             <button
               className="send-button"
-              onClick={sendMessage}
+              onClick={() => sendMessage()}
               disabled={
                 loading ||
                 !input.trim() ||
