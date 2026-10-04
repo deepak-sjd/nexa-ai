@@ -26,6 +26,158 @@
 
 
 /* =========================================================
+   COMPOSER: "+" MENU (upload document / create image)
+   ========================================================= */
+
+.composer-menu-wrapper {
+  position: relative;
+}
+
+.composer-plus-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 40px;
+  height: 40px;
+
+  flex: 0 0 40px;
+
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+
+  color: #9a9ba8;
+
+  background: rgba(255, 255, 255, 0.03);
+
+  cursor: pointer;
+
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.composer-plus-button:hover:not(:disabled) {
+  color: #e2e2e7;
+
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.composer-plus-button:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.composer-plus-button:disabled {
+  cursor: not-allowed;
+
+  opacity: 0.35;
+}
+
+.composer-plus-button:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+}
+
+.composer-plus-button[aria-expanded="true"] {
+  color: #e2e2e7;
+
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+/* Opens UPWARD, since the composer sits at the bottom of the
+   screen — unlike .conversation-menu (sidebar), which has room
+   to open downward. */
+.composer-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+
+  z-index: 30;
+
+  display: flex;
+  flex-direction: column;
+
+  width: 208px;
+
+  padding: 7px;
+
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+
+  background: linear-gradient(
+    160deg,
+    rgba(34, 36, 46, 0.99),
+    rgba(19, 21, 28, 0.99)
+  );
+
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  animation: composerMenuAppear 120ms ease both;
+}
+
+@keyframes composerMenuAppear {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.composer-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  width: 100%;
+
+  padding: 9px 10px;
+
+  border: none;
+  border-radius: 9px;
+
+  color: #e2e2e7;
+
+  background: transparent;
+
+  font-size: 13.5px;
+  text-align: left;
+
+  cursor: pointer;
+
+  transition: background 120ms ease;
+}
+
+.composer-menu-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.composer-menu-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex: 0 0 auto;
+
+  color: var(--accent-bright);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-menu {
+    animation: none;
+  }
+}
+
+
+/* =========================================================
    COMPOSER: IMAGE MODE TOGGLE
    Same metrics as .mic-button so the row stays aligned.
    ========================================================= */
@@ -37,13 +189,13 @@
   align-items: center;
   justify-content: center;
 
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
 
-  flex: 0 0 34px;
+  flex: 0 0 40px;
 
   border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 12px;
+  border-radius: 14px;
 
   color: #9a9ba8;
 

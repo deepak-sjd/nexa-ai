@@ -15,6 +15,7 @@ import {
 } from "./components/ImageStatusCards";
 import { ImageIcon } from "./components/ImageIcons";
 import { MoonIcon, SparkleThemeIcon } from "./components/ThemeIcons";
+import { PlusIcon, DocumentPlusIcon } from "./components/ComposerIcons";
 
 const USER_ID = 1;
 
@@ -394,6 +395,11 @@ function App() {
   // off after sending so a stray Enter never costs an image.
   const [imageMode, setImageMode] = useState(false);
 
+  // The "+" menu in the composer (Upload document / Create image) —
+  // same open/close-on-outside-click pattern as the per-conversation
+  // "..." menu elsewhere in this file.
+  const [composerMenuOpen, setComposerMenuOpen] = useState(false);
+
   // ============================================================
   // THEME
   // ============================================================
@@ -491,6 +497,29 @@ function App() {
   // ============================================================
   // CLOSE CONVERSATION MENU ON OUTSIDE CLICK
   // ============================================================
+
+  useEffect(() => {
+    if (!composerMenuOpen) {
+      return;
+    }
+
+    function handleClickOutsideComposerMenu(event) {
+      if (!event.target.closest(".composer-menu-wrapper")) {
+        setComposerMenuOpen(false);
+      }
+    }
+
+    document.addEventListener(
+      "mousedown",
+      handleClickOutsideComposerMenu
+    );
+
+    return () =>
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutsideComposerMenu
+      );
+  }, [composerMenuOpen]);
 
   useEffect(() => {
     if (!openMenuConversationId) {
@@ -2829,6 +2858,65 @@ function App() {
               disabled={!conversationId}
             />
 
+            <div className="composer-menu-wrapper">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.txt,.md,.csv,.xlsx"
+                onChange={handleFileInputChange}
+                style={{ display: "none" }}
+              />
+
+              <button
+                type="button"
+                className="composer-plus-button"
+                onClick={() =>
+                  setComposerMenuOpen((current) => !current)
+                }
+                disabled={!conversationId || loading}
+                aria-label="Add document or image"
+                aria-expanded={composerMenuOpen}
+                title="Upload a document or create an image"
+              >
+                <PlusIcon />
+              </button>
+
+              {composerMenuOpen && (
+                <div className="composer-menu">
+                  <button
+                    type="button"
+                    className="composer-menu-item"
+                    onClick={() => {
+                      setComposerMenuOpen(false);
+                      fileInputRef.current?.click();
+                    }}
+                  >
+                    <span className="composer-menu-icon">
+                      <DocumentPlusIcon />
+                    </span>
+
+                    Upload document
+                  </button>
+
+                  <button
+                    type="button"
+                    className="composer-menu-item"
+                    onClick={() => {
+                      setComposerMenuOpen(false);
+                      setImageMode(true);
+                      textareaRef.current?.focus();
+                    }}
+                  >
+                    <span className="composer-menu-icon">
+                      <ImageIcon size={16} />
+                    </span>
+
+                    Create image
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               className="image-toggle-button"
@@ -2887,7 +2975,9 @@ function App() {
 
           <p className="input-hint">
 
-            {loading ? (
+            {isUploading ? (
+              "Uploading document..."
+            ) : loading ? (
               isCreatingImage ? (
                 "Creating your image..."
               ) : (
@@ -2951,14 +3041,6 @@ function App() {
                 !isUploading && fileInputRef.current?.click()
               }
             >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.docx,.txt,.md,.csv,.xlsx"
-                onChange={handleFileInputChange}
-                style={{ display: "none" }}
-              />
-
               <UploadCloudIcon />
 
               <p className="documents-dropzone-title">
