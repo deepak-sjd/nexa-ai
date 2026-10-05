@@ -2714,9 +2714,9 @@ textarea {
   width: 100%;
 
   padding:
-    18px
+    12px
     24px
-    20px;
+    16px;
 
   background:
     linear-gradient(
@@ -2744,17 +2744,17 @@ textarea {
     var(--content-width)
   );
 
-  min-height: 56px;
+  min-height: 44px;
 
   margin: 0 auto;
 
-  gap: 10px;
+  gap: 8px;
 
   padding:
-    8px
-    8px
-    8px
-    20px;
+    6px
+    6px
+    6px
+    16px;
 
   border: 1px solid rgba(255, 255, 255, 0.10);
 
@@ -2802,13 +2802,13 @@ textarea {
 
   width: 100%;
 
-  min-height: 40px;
+  min-height: 30px;
   max-height: 150px;
 
   padding:
-    9px
+    6px
     10px
-    8px
+    6px
     0;
 
   border: 0;
@@ -2825,7 +2825,7 @@ textarea {
 
   font-size: 15px;
 
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 .input-container textarea::placeholder {
@@ -2850,13 +2850,13 @@ textarea {
   align-items: center;
   justify-content: center;
 
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
 
-  flex: 0 0 40px;
+  flex: 0 0 34px;
 
   border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 14px;
+  border-radius: 12px;
 
   color: #9a9ba8;
 
@@ -2937,12 +2937,12 @@ textarea {
   align-items: center;
   justify-content: center;
 
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
 
-  flex: 0 0 42px;
+  flex: 0 0 36px;
 
-  border-radius: 15px;
+  border-radius: 12px;
 
   color: #ffffff;
 
@@ -3399,4 +3399,245 @@ button:focus-visible {
 
     transition-duration: 0.01ms !important;
   }
+}
+
+
+/* =========================================================
+   TYPOGRAPHY + MICRO-ANIMATION LAYER (appended last on purpose —
+   these rules intentionally win the cascade over the base
+   component rules above, without needing !important)
+   ========================================================= */
+
+/* Display serif — reserved for a handful of real headline
+   moments (brand name, chat title, empty-state hero). Everything
+   else stays on the system sans stack, since that's what keeps
+   buttons/labels/messages legible at small sizes. */
+:root {
+  --font-display:
+    ui-serif,
+    Georgia,
+    Cambria,
+    "Times New Roman",
+    Times,
+    serif;
+}
+
+@keyframes headlineIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sidebar-brand h2,
+.brand h1,
+.empty-state-title {
+  font-family: var(--font-display);
+  background: linear-gradient(
+    120deg,
+    var(--accent-bright),
+    var(--accent) 55%,
+    var(--accent-secondary)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: headlineIn 0.4s var(--ease-out);
+}
+
+.sidebar-brand h2 {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.brand h1 {
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  transition: opacity 0.2s var(--ease-out);
+}
+
+.empty-state-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Taglines under the headline moments — small caps, tracked, quiet */
+.sidebar-brand span,
+.brand p {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+/* "Online" status pill — tightened + tracked to read as a label, not prose */
+.status span {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Section labels (PINNED / TODAY / YESTERDAY) — refined tracking */
+.conversation-section-label,
+.conversation-heading {
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+
+/* Conversation list — subtle hover/active motion instead of a hard cut */
+.conversation-item {
+  transition:
+    background-color 0.18s var(--ease-out),
+    transform 0.18s var(--ease-out);
+}
+
+.conversation-item:hover {
+  transform: translateX(2px);
+}
+
+.conversation-title {
+  font-weight: 500;
+  transition: color 0.18s var(--ease-out);
+}
+
+.conversation-item.active .conversation-title {
+  font-weight: 700;
+  color: var(--accent-bright);
+}
+
+/* Context menu entrance */
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.conversation-menu {
+  animation: menuIn 0.15s var(--ease-out);
+}
+
+/* Upload / document rows — slightly bolder file names, quiet metadata */
+.documents-dropzone-title {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.document-row-name {
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+/* Buttons — small lift on hover instead of a static state */
+.new-chat-button:hover:not(:disabled),
+.documents-button:hover,
+.send-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+/* =========================================================
+   FIX: conversation menu (Pin / Rename / Delete) letting the
+   row text beneath it show through. Every conversation row is
+   `position: relative` with no z-index, so rows below the open
+   menu can paint over it depending on the browser's compositing
+   order. Giving the open row an explicit, much higher z-index —
+   and making the dropdown itself fully opaque — makes it always
+   win, deterministically, regardless of scroll position or which
+   row triggered it.
+   ========================================================= */
+
+.conversation-item {
+  z-index: 0;
+}
+
+.conversation-item:has(.conversation-menu) {
+  z-index: 60;
+}
+
+/* =========================================================
+   CONVERSATION DROPDOWN FORMAT (Pin / Rename / Delete) — box
+   size and text size here are matched by hand in
+   ImageGeneration.css's .composer-menu / .composer-menu-item,
+   so both popups look identical without the two files fighting
+   over the same selectors (ImageGeneration.css loads after this
+   file, so it — not this one — must own anything with a
+   "composer-" prefix).
+   ========================================================= */
+
+.conversation-menu {
+  width: max-content;
+  min-width: 176px;
+  max-width: 230px;
+
+  padding: 6px;
+
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+
+  background-color: #191b24;
+  background-image: linear-gradient(
+    160deg,
+    rgba(34, 36, 46, 1),
+    rgba(19, 21, 28, 1)
+  );
+
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.conversation-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+
+  width: 100%;
+
+  padding: 9px 10px;
+
+  border: none;
+  border-radius: 9px;
+
+  background: transparent;
+
+  color: #eaeaef;
+
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+
+  cursor: pointer;
+
+  transition: background-color 0.15s var(--ease-out);
+}
+
+.conversation-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.conversation-menu-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 15px;
+  flex-shrink: 0;
+
+  color: #a9aab4;
 }

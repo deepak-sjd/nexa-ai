@@ -13,7 +13,7 @@ import {
   ImageErrorCard,
   ImageGeneratingCard,
 } from "./components/ImageStatusCards";
-import { ImageIcon } from "./components/ImageIcons";
+import { ImageIcon, AlertIcon, RefreshIcon } from "./components/ImageIcons";
 import { MoonIcon, SparkleThemeIcon } from "./components/ThemeIcons";
 import { PlusIcon, DocumentPlusIcon } from "./components/ComposerIcons";
 
@@ -399,6 +399,12 @@ function App() {
   // same open/close-on-outside-click pattern as the per-conversation
   // "..." menu elsewhere in this file.
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
+
+  // The file picked from the composer's "+" menu, shown as a chip
+  // above the textarea while it uploads — separate from the
+  // Documents modal's own upload state (that still works as before).
+  // Shape: { file, name, status: "uploading" | "done" | "error", error? }
+  const [attachedFile, setAttachedFile] = useState(null);
 
   // ============================================================
   // THEME
@@ -1042,6 +1048,15 @@ function App() {
     setUploadError("");
     setIsUploading(true);
 
+    // Only touch the composer chip if it's still showing THIS file —
+    // avoids a stale/slow upload clobbering a newer attachment.
+    const patchChip = (patch) =>
+      setAttachedFile((current) =>
+        current && current.file === file
+          ? { ...current, ...patch }
+          : current
+      );
+
     const formData = new FormData();
     formData.append("file", file);
 
@@ -1065,17 +1080,23 @@ function App() {
       setDocuments((previous) => [data, ...previous]);
 
       if (data.status === "failed") {
-        setUploadError(
+        const message =
           data.error_message ||
-            "This file could not be processed."
-        );
+          "This file could not be processed.";
+
+        setUploadError(message);
+        patchChip({ status: "error", error: message });
+      } else {
+        patchChip({ status: "done" });
       }
     } catch (error) {
       console.error("Upload document error:", error);
 
-      setUploadError(
-        error.message || "Upload failed. Please try again."
-      );
+      const message =
+        error.message || "Upload failed. Please try again.";
+
+      setUploadError(message);
+      patchChip({ status: "error", error: message });
     } finally {
       setIsUploading(false);
     }
@@ -1084,9 +1105,27 @@ function App() {
   function handleFileInputChange(event) {
     const file = event.target.files?.[0];
 
+    if (file) {
+      setAttachedFile({ file, name: file.name, status: "uploading" });
+    }
+
     uploadDocumentFile(file);
 
     event.target.value = "";
+  }
+
+  function removeAttachedFile() {
+    setAttachedFile(null);
+  }
+
+  function retryAttachedFile() {
+    if (!attachedFile?.file) {
+      return;
+    }
+
+    setAttachedFile((current) => ({ ...current, status: "uploading" }));
+
+    uploadDocumentFile(attachedFile.file);
   }
 
   function handleDrop(event) {
@@ -1607,6 +1646,10 @@ function App() {
 
       setImageMode(false);
 
+      // Image mode and a composer attachment don't really combine —
+      // drop the (unrelated) chip so it doesn't linger stale.
+      setAttachedFile(null);
+
       generateImage(imagePrompt);
 
       return;
@@ -1620,12 +1663,22 @@ function App() {
 
     const userClientId = `user-${Date.now()}`;
 
+    // Snapshot the composer's attachment chip onto this message so
+    // it keeps showing (e.g. "uploading") even after the chip itself
+    // is cleared below — same idea as how `text` is captured before
+    // `input` gets cleared.
+    const messageAttachment =
+      !isRetry && attachedFile
+        ? { name: attachedFile.name, status: attachedFile.status }
+        : null;
+
     const userMessage = {
       id: userClientId,
       // Stable React key — `id` gets replaced by the server id.
       clientId: userClientId,
       role: "user",
       content: text,
+      attachment: messageAttachment,
     };
 
     setMessages((previous) => [
@@ -1637,6 +1690,8 @@ function App() {
       setInput("");
 
       resetTextarea();
+
+      setAttachedFile(null);
     }
 
     setLoading(true);
@@ -2703,9 +2758,18 @@ function App() {
                             </div>
                           )
                         ) : (
-                          <div className="user-text">
-                            {message.content}
-                          </div>
+                          <>
+                            {message.attachment && (
+                              <div className="message-attachment-pill">
+                                <FileIcon size={13} />
+                                <span>{message.attachment.name}</span>
+                              </div>
+                            )}
+
+                            <div className="user-text">
+                              {message.content}
+                            </div>
+                          </>
                         )}
 
                         {isStreaming &&
@@ -2837,6 +2901,58 @@ function App() {
         ==================================================== */}
 
         <footer className="input-section">
+
+          {attachedFile && (
+            <div
+              className={`composer-attachment-chip ${
+                attachedFile.status === "error" ? "is-error" : ""
+              }`}
+            >
+              <span className="composer-attachment-chip-icon">
+                {attachedFile.status === "error" ? (
+                  <AlertIcon size={15} />
+                ) : (
+                  <FileIcon size={15} />
+                )}
+              </span>
+
+              <span className="composer-attachment-chip-text">
+                <span className="composer-attachment-chip-name">
+                  {attachedFile.name}
+                </span>
+
+                <span className="composer-attachment-chip-status">
+                  {attachedFile.status === "uploading"
+                    ? "Uploading..."
+                    : attachedFile.status === "error"
+                    ? attachedFile.error || "Upload failed"
+                    : "Ready — added to NEXA AI's knowledge base"}
+                </span>
+              </span>
+
+              {attachedFile.status === "error" && (
+                <button
+                  type="button"
+                  className="composer-attachment-chip-action"
+                  onClick={retryAttachedFile}
+                  aria-label="Retry upload"
+                  title="Retry upload"
+                >
+                  <RefreshIcon size={13} />
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="composer-attachment-chip-action"
+                onClick={removeAttachedFile}
+                aria-label="Remove attachment"
+                title="Remove"
+              >
+                ×
+              </button>
+            </div>
+          )}
 
           <div className="input-container">
 
