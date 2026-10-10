@@ -165,9 +165,6 @@
 
 /* =========================================================
    COMPOSER: "+" MENU (upload document / create image)
-   Sizing/format is unified with .conversation-menu in App.css —
-   same box size (max-content, 176–230px), same item size
-   (13.5px / weight 600), same 34px trigger button as mic/send.
    ========================================================= */
 
 .composer-menu-wrapper {
@@ -179,13 +176,13 @@
   align-items: center;
   justify-content: center;
 
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
 
-  flex: 0 0 34px;
+  flex: 0 0 40px;
 
   border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 12px;
+  border-radius: 14px;
 
   color: #9a9ba8;
 
@@ -241,11 +238,9 @@
   display: flex;
   flex-direction: column;
 
-  width: max-content;
-  min-width: 176px;
-  max-width: 230px;
+  width: 208px;
 
-  padding: 6px;
+  padding: 7px;
 
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 14px;
@@ -278,7 +273,7 @@
 .composer-menu-item {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
 
   width: 100%;
 
@@ -287,14 +282,12 @@
   border: none;
   border-radius: 9px;
 
-  color: #eaeaef;
+  color: #e2e2e7;
 
   background: transparent;
 
   font-size: 13.5px;
-  font-weight: 600;
   text-align: left;
-  white-space: nowrap;
 
   cursor: pointer;
 
@@ -334,13 +327,13 @@
   align-items: center;
   justify-content: center;
 
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
 
-  flex: 0 0 34px;
+  flex: 0 0 40px;
 
   border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 12px;
+  border-radius: 14px;
 
   color: #9a9ba8;
 

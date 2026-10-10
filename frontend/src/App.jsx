@@ -2956,24 +2956,6 @@ function App() {
 
           <div className="input-container">
 
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                isListening
-                  ? "Listening..."
-                  : imageMode
-                  ? "Describe the image you want to create..."
-                  : conversationId
-                  ? "Ask NEXA AI anything..."
-                  : "Connecting to NEXA AI..."
-              }
-              rows="1"
-              disabled={!conversationId}
-            />
-
             <div className="composer-menu-wrapper">
               <input
                 ref={fileInputRef}
@@ -3032,6 +3014,24 @@ function App() {
                 </div>
               )}
             </div>
+
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                isListening
+                  ? "Listening..."
+                  : imageMode
+                  ? "Describe the image you want to create..."
+                  : conversationId
+                  ? "Ask NEXA AI anything..."
+                  : "Connecting to NEXA AI..."
+              }
+              rows="1"
+              disabled={!conversationId}
+            />
 
             <button
               type="button"
