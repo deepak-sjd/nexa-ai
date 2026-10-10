@@ -1,0 +1,564 @@
+/* =========================================================
+   NEXA AI — Mobile / responsive layer
+   Imported LAST in App.jsx (after ImageGeneration.css) so these
+   rules win the cascade without !important. Desktop (>900px) is
+   untouched except for the small fixes in the first block.
+   ========================================================= */
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.chat-container,
+.conversation-list,
+.documents-list {
+  overscroll-behavior: contain;
+}
+
+
+/* =========================================================
+   ALL SIZES — real bugs, not just mobile
+   ========================================================= */
+
+/* Wide Mermaid diagrams: centering a flex child that overflows
+   cuts off its left edge (unscrollable). Auto margins center it
+   when it fits and start-align it when it doesn't. */
+.mermaid-diagram {
+  justify-content: flex-start;
+}
+
+.mermaid-diagram svg {
+  margin: 0 auto;
+}
+
+/* Documents modal vs sidebar both sat at z-index 100. */
+.documents-modal-overlay {
+  z-index: 120;
+}
+
+
+/* =========================================================
+   TOUCH DEVICES — no hover
+   ========================================================= */
+
+@media (hover: none) {
+  /* The ⋮ menu was invisible until hover, so unreachable on touch. */
+  .conversation-menu-wrapper {
+    opacity: 0.8;
+  }
+
+  .conversation-action {
+    width: 34px;
+    height: 34px;
+  }
+
+  .conversation-menu-shortcut {
+    display: none;
+  }
+
+  .conversation-item:hover {
+    transform: none;
+  }
+}
+
+
+/* =========================================================
+   TABLET + PHONE (<= 900px)
+   ========================================================= */
+
+@media (max-width: 900px) {
+
+  /* Battery / jank: no perpetual background repaint on phones */
+  body,
+  .sidebar-logo,
+  .brand-logo,
+  .empty-state-logo {
+    animation: none;
+  }
+
+  /* Composer becomes a normal flex row at the bottom instead of
+     floating over the chat. The chat area now shrinks to fit it
+     automatically (attachment chip, keyboard, safe area...). */
+  .input-section {
+    position: relative;
+
+    flex: 0 0 auto;
+
+    padding:
+      10px
+      max(12px, env(safe-area-inset-right))
+      calc(10px + env(safe-area-inset-bottom))
+      max(12px, env(safe-area-inset-left));
+
+    border-top: 1px solid var(--border);
+
+    background: rgba(var(--bg-rgb), 0.94);
+
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .chat-end-anchor {
+    scroll-margin-bottom: 0;
+  }
+
+  .header {
+    min-height: calc(60px + env(safe-area-inset-top));
+
+    padding-top: env(safe-area-inset-top);
+
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Drawer */
+  .sidebar {
+    width: min(86vw, 320px);
+    min-width: 0;
+
+    padding-top: calc(18px + env(safe-area-inset-top));
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+
+    transition: transform 280ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .sidebar.sidebar-open {
+    box-shadow: 18px 0 60px rgba(0, 0, 0, 0.55);
+  }
+
+  .sidebar-overlay {
+    animation: navOverlayIn 220ms ease both;
+  }
+
+  .new-chat-button,
+  .documents-button {
+    min-height: 44px;
+  }
+
+  .conversation-main {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .conversation-title {
+    font-size: 14px;
+  }
+
+  /* 16px+ stops iOS Safari zooming the whole page on focus —
+     that zoom is what makes the layout feel "wide". */
+  .sidebar-search-input,
+  .conversation-edit-input {
+    font-size: 16px;
+  }
+
+  .sidebar-search-input {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+}
+
+@keyframes navOverlayIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+
+/* =========================================================
+   PHONE (<= 640px)
+   ========================================================= */
+
+@media (max-width: 640px) {
+
+  /* ---------- header ---------- */
+
+  .header {
+    min-height: calc(58px + env(safe-area-inset-top));
+
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+
+  .header-left {
+    flex: 1 1 auto;
+    min-width: 0;
+
+    gap: 10px;
+  }
+
+  .brand {
+    flex: 1 1 auto;
+    min-width: 0;
+
+    gap: 10px;
+  }
+
+  .brand-text {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .brand h1 {
+    max-width: none;
+
+    font-size: 17px;
+  }
+
+  .brand-logo {
+    width: 36px;
+    height: 36px;
+
+    flex-basis: 36px;
+
+    border-radius: 11px;
+
+    font-size: 14px;
+  }
+
+  .menu-button,
+  .theme-toggle-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .header-right {
+    flex: 0 0 auto;
+
+    gap: 8px;
+  }
+
+  /* "Online" pill -> just the dot */
+  .status {
+    justify-content: center;
+
+    width: 34px;
+    height: 34px;
+
+    padding: 0;
+  }
+
+  .status span:not(.status-dot) {
+    display: none;
+  }
+
+  /* ---------- chat ---------- */
+
+  .chat-content {
+    padding:
+      18px
+      max(12px, env(safe-area-inset-right))
+      28px
+      max(12px, env(safe-area-inset-left));
+  }
+
+  .message-row {
+    margin-bottom: 20px;
+  }
+
+  .user-avatar {
+    display: none;
+  }
+
+  .user-row .message-header {
+    display: none;
+  }
+
+  .assistant-avatar {
+    width: 28px;
+    height: 28px;
+
+    flex-basis: 28px;
+
+    margin-right: 10px;
+
+    border-radius: 9px;
+
+    font-size: 11px;
+  }
+
+  .user-row .message-wrapper {
+    max-width: 90%;
+  }
+
+  .message-bubble {
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  /* Assistant text uses the full row width, no inset */
+  .assistant-message {
+    padding: 2px 0;
+
+    border-radius: 0;
+  }
+
+  .user-message {
+    padding: 10px 14px;
+
+    border-radius: 18px 6px 18px 18px;
+  }
+
+  .markdown-content h1 {
+    font-size: 20px;
+  }
+
+  .markdown-content h2 {
+    font-size: 18px;
+  }
+
+  .markdown-content h3 {
+    font-size: 16px;
+  }
+
+  .markdown-content ul,
+  .markdown-content ol {
+    padding-left: 20px;
+  }
+
+  .code-block,
+  .code-block code {
+    font-size: 12px;
+  }
+
+  .copy-button,
+  .speak-button {
+    min-height: 32px;
+
+    padding: 7px 10px;
+
+    font-size: 12px;
+  }
+
+  /* ---------- composer ---------- */
+
+  .input-container {
+    gap: 6px;
+
+    min-height: 54px;
+
+    padding: 6px;
+
+    border-radius: 26px;
+
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .input-container:focus-within {
+    border-color: rgba(var(--accent-rgb), 0.55);
+
+    box-shadow:
+      0 0 0 3px rgba(var(--accent-rgb), 0.14),
+      0 12px 40px rgba(0, 0, 0, 0.45);
+  }
+
+  .input-container textarea {
+    min-height: 40px;
+
+    padding: 9px 4px;
+
+    font-size: 16px;
+    line-height: 1.4;
+  }
+
+  .composer-plus-button,
+  .image-toggle-button,
+  .mic-button {
+    width: 38px;
+    height: 38px;
+
+    flex-basis: 38px;
+
+    margin-bottom: 1px;
+
+    border-radius: 50%;
+  }
+
+  /* Image mode is reachable from the "+" menu, so the toggle
+     only shows while the mode is ON (to turn it off). */
+  .image-toggle-button[aria-pressed="false"] {
+    display: none;
+  }
+
+  .send-button {
+    width: 40px;
+    height: 40px;
+
+    flex-basis: 40px;
+
+    border-radius: 50%;
+
+    font-size: 16px;
+  }
+
+  /* The keyboard-shortcut hint is meaningless on a phone, and the
+     other states it shows already have their own UI (streaming
+     cursor, pending card, attachment chip, image-mode placeholder). */
+  .input-hint {
+    display: none;
+  }
+
+  .composer-attachment-chip {
+    max-width: none;
+
+    margin: 0 0 8px;
+  }
+
+  .composer-menu {
+    width: min(240px, calc(100vw - 32px));
+  }
+
+  .composer-menu-item {
+    padding: 12px;
+
+    font-size: 15px;
+  }
+
+  /* ---------- empty state ---------- */
+
+  .empty-state {
+    margin: 2vh auto 0;
+  }
+
+  .empty-state-subtitle {
+    margin-bottom: 22px;
+
+    font-size: 14px;
+  }
+
+  .empty-state-prompts {
+    grid-template-columns: 1fr 1fr;
+
+    gap: 8px;
+  }
+
+  .empty-state-prompt-card {
+    display: flex;
+    align-items: center;
+
+    min-height: 56px;
+
+    padding: 12px;
+
+    border-radius: 13px;
+
+    font-size: 12.5px;
+    line-height: 1.35;
+  }
+
+  /* ---------- documents modal -> bottom sheet ---------- */
+
+  .documents-modal-overlay {
+    align-items: flex-end;
+
+    padding: 0;
+  }
+
+  .documents-modal {
+    max-width: none;
+    max-height: 88dvh;
+
+    padding-bottom: env(safe-area-inset-bottom);
+
+    border-bottom: 0;
+    border-radius: 22px 22px 0 0;
+
+    animation: sheetUp 260ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+
+  .documents-modal-header {
+    position: relative;
+
+    padding-top: 24px;
+  }
+
+  .documents-modal-header::before {
+    content: "";
+
+    position: absolute;
+    top: 8px;
+    left: 50%;
+
+    width: 36px;
+    height: 4px;
+
+    margin-left: -18px;
+
+    border-radius: 999px;
+
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  .documents-dropzone {
+    margin: 14px 16px 0;
+
+    padding: 22px 14px;
+  }
+
+  .documents-list {
+    min-height: 0;
+
+    margin: 12px 8px 16px;
+  }
+
+  .document-row-delete {
+    width: 34px;
+    height: 34px;
+  }
+
+  /* ---------- lightbox ---------- */
+
+  .image-lightbox {
+    padding:
+      calc(60px + env(safe-area-inset-top))
+      8px
+      calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .image-lightbox-toolbar {
+    top: calc(10px + env(safe-area-inset-top));
+  }
+}
+
+@keyframes sheetUp {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Very narrow phones: one prompt card per row */
+@media (max-width: 340px) {
+  .empty-state-prompts {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Phones in landscape: reclaim vertical space */
+@media (max-height: 480px) and (orientation: landscape) {
+  .header {
+    min-height: calc(48px + env(safe-area-inset-top));
+  }
+
+  .brand-logo,
+  .empty-state-logo {
+    display: none;
+  }
+
+  .empty-state {
+    margin-top: 0;
+  }
+}

@@ -1,0 +1,78 @@
+/* =========================================================
+   RESIZABLE SIDEBAR
+   Width comes from --sidebar-width (set inline on .app by
+   useResizableSidebar). Loaded after App.css on purpose.
+   ========================================================= */
+
+.app {
+  --sidebar-width: 280px;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+}
+
+/* The handle sits over the sidebar's right border. It lives outside
+   .sidebar because the sidebar has overflow: hidden. */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--sidebar-width) - 4px);
+
+  z-index: 100;
+
+  width: 8px;
+
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.sidebar-resizer::after {
+  content: "";
+
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+
+  width: 2px;
+
+  background: transparent;
+
+  transition: background 150ms ease;
+}
+
+.sidebar-resizer:hover::after,
+.sidebar-resizer:focus-visible::after,
+.app.is-resizing .sidebar-resizer::after {
+  background: rgba(var(--accent-rgb), 0.65);
+}
+
+.sidebar-resizer:focus-visible {
+  outline: none;
+}
+
+body.is-resizing-sidebar {
+  cursor: col-resize;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Modal must always sit above the sidebar + its handle. */
+.documents-modal-overlay {
+  z-index: 200;
+}
+
+/* Tablet/mobile: sidebar is a drawer — fixed width, no resizing. */
+@media (max-width: 900px) {
+  .sidebar {
+    width: 290px;
+    min-width: 290px;
+  }
+
+  .sidebar-resizer {
+    display: none;
+  }
+}

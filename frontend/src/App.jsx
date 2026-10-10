@@ -4,6 +4,9 @@ import remarkGfm from "remark-gfm";
 import mermaid from "mermaid";
 import "./App.css";
 import "./ImageGeneration.css";
+import "./Mobile.css";
+import "./Sidebar.css";
+import { useResizableSidebar } from "./hooks/useResizableSidebar";
 
 import { API_BASE_URL } from "./services/api";
 import { useImageGeneration } from "./hooks/useImageGeneration";
@@ -420,6 +423,16 @@ function App() {
       return "dark";
     }
   });
+
+  // ============================================================
+  // RESIZABLE SIDEBAR (drag the sidebar's right edge)
+  // ============================================================
+
+  const {
+    width: sidebarWidth,
+    dragging: sidebarResizing,
+    handleProps: sidebarResizeProps,
+  } = useResizableSidebar();
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -2256,7 +2269,10 @@ function App() {
   // ============================================================
 
   return (
-    <div className="app">
+    <div
+      className={`app ${sidebarResizing ? "is-resizing" : ""}`}
+      style={{ "--sidebar-width": `${sidebarWidth}px` }}
+    >
 
       {/* ======================================================
           MOBILE OVERLAY
@@ -2447,6 +2463,12 @@ function App() {
         </div>
 
       </aside>
+
+      {/* ======================================================
+          SIDEBAR RESIZE HANDLE (drag left/right)
+      ====================================================== */}
+
+      <div className="sidebar-resizer" {...sidebarResizeProps} />
 
       {/* ======================================================
           MAIN AREA
