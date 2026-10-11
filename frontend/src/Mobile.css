@@ -562,3 +562,10 @@ a {
     margin-top: 0;
   }
 }
+
+/* Resizable sidebar: no drag handle in the mobile drawer layout */
+@media (max-width: 900px) {
+  .app .sidebar-resizer {
+    display: none;
+  }
+}

@@ -17,5 +17,9 @@ export default defineConfig([
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
+    rules: {
+      // `({ node, ...props })` is the standard react-markdown pattern
+      'no-unused-vars': ['error', { ignoreRestSiblings: true }],
+    },
   },
 ])
