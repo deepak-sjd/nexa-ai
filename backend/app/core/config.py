@@ -10,7 +10,10 @@ class Settings(BaseSettings):
     database_url: str
 
     gemini_api_key: str
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.5-flash"
+    # Used automatically if the main model keeps returning 503/429.
+    gemini_fallback_model: str = "gemini-3.1-flash-lite"
+    gemini_max_retries: int = 3
     gemini_image_model: str = "gemini-3.1-flash-image"
 
     upload_dir: str = "data/uploads"
