@@ -1,0 +1,3268 @@
+import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import mermaid from "mermaid";
+import "./App.css";
+import "./ImageGeneration.css";
+import "./Mobile.css";
+import "./Sidebar.css";
+import { useResizableSidebar } from "./hooks/useResizableSidebar";
+
+import { API_BASE_URL } from "./services/api";
+import { useImageGeneration } from "./hooks/useImageGeneration";
+import { normalizeHistory, parseImageCommand } from "./utils/imageMessage";
+import GeneratedImage from "./components/GeneratedImage";
+import {
+  ImageErrorCard,
+  ImageGeneratingCard,
+} from "./components/ImageStatusCards";
+import { ImageIcon, AlertIcon, RefreshIcon } from "./components/ImageIcons";
+import { MoonIcon, SparkleThemeIcon } from "./components/ThemeIcons";
+import { PlusIcon, DocumentPlusIcon } from "./components/ComposerIcons";
+
+const USER_ID = 1;
+
+// ============================================================
+// SMALL OUTLINE ICONS (no icon library — plain inline SVG)
+// ============================================================
+
+function PinIcon({ filled = false }) {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 17v5" />
+      <path d="M9 3h6l1 6 3 3v2H5v-2l3-3z" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  );
+}
+
+function FileIcon({ size = 17 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+    </svg>
+  );
+}
+
+function UploadCloudIcon() {
+  return (
+    <svg
+      width="28"
+      height="28"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4 14.9A5 5 0 0 1 6 5.3a6 6 0 0 1 11.7-1.6A5.5 5.5 0 0 1 20 14" />
+      <path d="M12 12v9" />
+      <path d="m8 16 4-4 4 4" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </svg>
+  );
+}
+
+function MicIcon() {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+      <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+      <path d="M12 18v4" />
+      <path d="M8 22h8" />
+    </svg>
+  );
+}
+
+function SpeakerIcon({ active = false }) {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M11 5 6 9H2v6h4l5 4V5Z" />
+      {active ? (
+        <>
+          <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+          <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+        </>
+      ) : (
+        <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+      )}
+    </svg>
+  );
+}
+
+// ============================================================
+// MERMAID DIAGRAM RENDERING
+// ============================================================
+
+mermaid.initialize({
+  startOnLoad: false,
+  theme: "dark",
+  securityLevel: "strict",
+  fontFamily:
+    "-apple-system, BlinkMacSystemFont, 'Segoe UI', " +
+    "Roboto, Helvetica, Arial, sans-serif",
+  flowchart: {
+    htmlLabels: false,
+    useMaxWidth: false,
+  },
+  sequence: {
+    useMaxWidth: false,
+  },
+  class: {
+    useMaxWidth: false,
+  },
+});
+
+let mermaidDiagramCounter = 0;
+
+function MermaidDiagram({ code }) {
+  const [svg, setSvg] = useState("");
+  const [error, setError] = useState(null);
+
+  const idRef = useRef(null);
+
+  if (idRef.current === null) {
+    mermaidDiagramCounter += 1;
+    idRef.current = `nexa-mermaid-${mermaidDiagramCounter}`;
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function renderDiagram() {
+      try {
+        const { svg: renderedSvg } = await mermaid.render(
+          idRef.current,
+          code
+        );
+
+        if (!cancelled) {
+          setSvg(renderedSvg);
+          setError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err?.message || "Could not render this diagram."
+          );
+        }
+      }
+    }
+
+    renderDiagram();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [code]);
+
+  if (error) {
+    return (
+      <div className="mermaid-error">
+        <p>Couldn't render this diagram.</p>
+
+        <pre className="code-block">
+          <code>{code}</code>
+        </pre>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="mermaid-diagram"
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+}
+
+const EXAMPLE_PROMPTS = [
+  {
+    label: "Explain how RAG works",
+    prompt:
+      "Explain how RAG works in this system, step by step.",
+  },
+  {
+    label: "Diagram the pipeline",
+    prompt:
+      "Show me a diagram of NEXA AI's retrieval pipeline.",
+  },
+  {
+    label: "What can I upload?",
+    prompt:
+      "What file types can I upload, and what happens to them?",
+  },
+  {
+    label: "Summarize a concept",
+    prompt:
+      "Summarize the difference between embeddings and reranking.",
+  },
+  {
+    label: "Create an image",
+    prompt:
+      "A serene mountain lake at sunrise, soft watercolor style",
+    mode: "image",
+  },
+  {
+    label: "Design a logo",
+    prompt:
+      "A minimal logo for a coffee shop called Ember, flat vector, warm colors",
+    mode: "image",
+  },
+];
+
+function EmptyState({ onPromptClick }) {
+  return (
+    <div className="empty-state">
+      <div className="empty-state-logo">
+        <span>N</span>
+      </div>
+
+      <h1 className="empty-state-title">
+        How can I help you today?
+      </h1>
+
+      <p className="empty-state-subtitle">
+        Ask a question, upload a document, request a
+        diagram, or create an image — NEXA AI grounds its
+        answers in what it actually knows.
+      </p>
+
+      <div className="empty-state-prompts">
+        {EXAMPLE_PROMPTS.map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            className="empty-state-prompt-card"
+            onClick={() => onPromptClick(item.prompt, item.mode)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  // ============================================================
+  // STATE
+  // ============================================================
+
+  const [conversationId, setConversationId] = useState(null);
+
+  const [conversations, setConversations] = useState([]);
+
+  const [messages, setMessages] = useState([
+    {
+      id: "welcome",
+      role: "assistant",
+      content: "Hello! I'm NEXA AI. How can I help you today?",
+    },
+  ]);
+
+  const [input, setInput] = useState("");
+
+  const [loading, setLoading] = useState(false);
+
+  const [copiedMessageId, setCopiedMessageId] = useState(null);
+
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const [editingConversationId, setEditingConversationId] =
+    useState(null);
+
+  const [editingTitle, setEditingTitle] = useState("");
+
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const [openMenuConversationId, setOpenMenuConversationId] =
+    useState(null);
+
+  const [documentsModalOpen, setDocumentsModalOpen] =
+    useState(false);
+
+  const [documents, setDocuments] = useState([]);
+
+  const [documentsLoading, setDocumentsLoading] =
+    useState(false);
+
+  const [isUploading, setIsUploading] = useState(false);
+
+  const [uploadError, setUploadError] = useState("");
+
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+
+  const [isListening, setIsListening] = useState(false);
+
+  const [speechSupported, setSpeechSupported] = useState(true);
+
+  const [speakingMessageId, setSpeakingMessageId] =
+    useState(null);
+
+  // When on, the next message is sent to the image endpoint
+  // instead of the chat endpoint. One-shot: it switches itself
+  // off after sending so a stray Enter never costs an image.
+  const [imageMode, setImageMode] = useState(false);
+
+  // The "+" menu in the composer (Upload document / Create image) —
+  // same open/close-on-outside-click pattern as the per-conversation
+  // "..." menu elsewhere in this file.
+  const [composerMenuOpen, setComposerMenuOpen] = useState(false);
+
+  // The file picked from the composer's "+" menu, shown as a chip
+  // above the textarea while it uploads — separate from the
+  // Documents modal's own upload state (that still works as before).
+  // Shape: { file, name, status: "uploading" | "done" | "error", error? }
+  const [attachedFile, setAttachedFile] = useState(null);
+
+  // ============================================================
+  // THEME
+  // ============================================================
+  // "dark" (default, current look) or "vibrant". Read synchronously
+  // from localStorage so the very first render already has the
+  // right theme — no flash of the wrong one.
+  const [theme, setTheme] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem("nexa-theme");
+      return stored === "vibrant" ? "vibrant" : "dark";
+    } catch {
+      return "dark";
+    }
+  });
+
+  // ============================================================
+  // RESIZABLE SIDEBAR (drag the sidebar's right edge)
+  // ============================================================
+
+  const {
+    width: sidebarWidth,
+    dragging: sidebarResizing,
+    handleProps: sidebarResizeProps,
+  } = useResizableSidebar();
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+
+    try {
+      window.localStorage.setItem("nexa-theme", theme);
+    } catch {
+      // Private browsing / storage disabled — theme just won't
+      // persist across reloads, not worth surfacing to the user.
+    }
+  }, [theme]);
+
+  function cycleTheme() {
+    setTheme((current) => (current === "dark" ? "vibrant" : "dark"));
+  }
+
+  // ============================================================
+  // REFS
+  // ============================================================
+
+  const messagesEndRef = useRef(null);
+
+  const fileInputRef = useRef(null);
+
+  const speechRecognitionRef = useRef(null);
+
+  const textareaRef = useRef(null);
+
+  const conversationCreatedRef = useRef(false);
+
+  // ============================================================
+  // IMAGE GENERATION
+  // ============================================================
+
+  const {
+    generate: generateImage,
+    cancel: cancelImageGeneration,
+    retry: retryImageGeneration,
+  } = useImageGeneration({
+    conversationId,
+    setMessages,
+    setLoading,
+    onConversationUpdate: applyConversationTitleUpdate,
+  });
+
+  // ============================================================
+  // AUTO SCROLL
+  // ============================================================
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: loading ? "auto" : "smooth",
+      block: "end",
+    });
+  }, [messages, loading]);
+
+  // ============================================================
+  // VOICE: FEATURE DETECTION
+  // ============================================================
+
+  useEffect(() => {
+    const SpeechRecognitionApi =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
+
+    const hasSpeechSynthesis =
+      typeof window.speechSynthesis !== "undefined";
+
+    setSpeechSupported(
+      Boolean(SpeechRecognitionApi) && hasSpeechSynthesis
+    );
+
+    // Stop any speaking/listening if the component unmounts
+    // (e.g. hot reload during development).
+    return () => {
+      speechRecognitionRef.current?.stop();
+      window.speechSynthesis?.cancel();
+    };
+  }, []);
+
+  // ============================================================
+  // CLOSE CONVERSATION MENU ON OUTSIDE CLICK
+  // ============================================================
+
+  useEffect(() => {
+    if (!composerMenuOpen) {
+      return;
+    }
+
+    function handleClickOutsideComposerMenu(event) {
+      if (!event.target.closest(".composer-menu-wrapper")) {
+        setComposerMenuOpen(false);
+      }
+    }
+
+    document.addEventListener(
+      "mousedown",
+      handleClickOutsideComposerMenu
+    );
+
+    return () =>
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutsideComposerMenu
+      );
+  }, [composerMenuOpen]);
+
+  useEffect(() => {
+    if (!openMenuConversationId) {
+      return;
+    }
+
+    function handleClickOutside(event) {
+      if (!event.target.closest(".conversation-menu-wrapper")) {
+        setOpenMenuConversationId(null);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () =>
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutside
+      );
+  }, [openMenuConversationId]);
+
+  // ============================================================
+  // INITIALIZE APPLICATION
+  // ============================================================
+
+  useEffect(() => {
+    if (conversationCreatedRef.current) {
+      return;
+    }
+
+    conversationCreatedRef.current = true;
+
+    initializeChat();
+    loadDocuments();
+  }, []);
+
+  // ============================================================
+  // LOAD ALL CONVERSATIONS
+  // ============================================================
+
+  async function loadConversations() {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/conversations/user/${USER_ID}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          "Could not load conversation history"
+        );
+      }
+
+      const data = await response.json();
+
+      if (!Array.isArray(data)) {
+        console.warn(
+          "Unexpected conversations response:",
+          data
+        );
+
+        return [];
+      }
+
+      setConversations(data);
+
+      console.log(
+        "Conversation history refreshed:",
+        data
+      );
+
+      return data;
+    } catch (error) {
+      console.error(
+        "Conversation history error:",
+        error
+      );
+
+      return [];
+    }
+  }
+
+  // ============================================================
+  // INITIALIZE CHAT
+  // ============================================================
+
+  async function initializeChat() {
+    try {
+      const data = await loadConversations();
+
+      // --------------------------------------------------------
+      // Existing conversation
+      // --------------------------------------------------------
+
+      if (data.length > 0) {
+        const firstConversationId = data[0].id;
+
+        setConversationId(firstConversationId);
+
+        console.log(
+          "Loaded existing conversation:",
+          firstConversationId
+        );
+
+        await loadConversationMessages(
+          firstConversationId
+        );
+
+        return;
+      }
+
+      // --------------------------------------------------------
+      // No conversation exists
+      // --------------------------------------------------------
+
+      await createConversation();
+    } catch (error) {
+      console.error(
+        "Chat initialization error:",
+        error
+      );
+    }
+  }
+
+  // ============================================================
+  // CREATE CONVERSATION
+  // ============================================================
+
+  async function createConversation(
+    customTitle = "New Conversation"
+  ) {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/conversations`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            user_id: USER_ID,
+            title: customTitle,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+
+        throw new Error(
+          errorText ||
+            "Could not create conversation"
+        );
+      }
+
+      const conversation = await response.json();
+
+      setConversations((previous) => [
+        conversation,
+        ...previous,
+      ]);
+
+      setConversationId(conversation.id);
+
+      setMessages([
+        {
+          id: "welcome",
+          role: "assistant",
+          content:
+            "Hello! I'm NEXA AI. How can I help you today?",
+        },
+      ]);
+
+      setInput("");
+
+      resetTextarea();
+
+      console.log(
+        "NEXA AI conversation created:",
+        conversation.id
+      );
+
+      return conversation;
+    } catch (error) {
+      console.error(
+        "Conversation creation error:",
+        error
+      );
+
+      return null;
+    }
+  }
+
+  // ============================================================
+  // LOAD CONVERSATION MESSAGES
+  // ============================================================
+
+  async function loadConversationMessages(
+    conversationIdToLoad
+  ) {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/conversations/${conversationIdToLoad}/messages`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+
+        throw new Error(
+          errorText ||
+            "Could not load conversation messages"
+        );
+      }
+
+      const data = await response.json();
+
+      // (Deliberately not logging `data` — image messages can be
+      // megabytes and would flood the console.)
+
+      // --------------------------------------------------------
+      // Backend must return an array
+      // --------------------------------------------------------
+
+      if (!Array.isArray(data)) {
+        console.warn(
+          "Unexpected message history response:",
+          data
+        );
+
+        setMessages([
+          {
+            id: `welcome-${conversationIdToLoad}`,
+            role: "assistant",
+            content:
+              "Hello! I'm NEXA AI. How can I help you today?",
+          },
+        ]);
+
+        return;
+      }
+
+      // --------------------------------------------------------
+      // No previous messages
+      // --------------------------------------------------------
+
+      if (data.length === 0) {
+        setMessages([
+          {
+            id: `welcome-${conversationIdToLoad}`,
+            role: "assistant",
+            content:
+              "Hello! I'm NEXA AI. How can I help you today?",
+          },
+        ]);
+
+        return;
+      }
+
+      // --------------------------------------------------------
+      // Load existing messages
+      // --------------------------------------------------------
+
+      // normalizeHistory also pulls generated images out of
+      // message content and attaches each image's prompt.
+      setMessages(normalizeHistory(data));
+    } catch (error) {
+      console.error(
+        "Conversation history loading error:",
+        error
+      );
+
+      setMessages([
+        {
+          id: `welcome-${conversationIdToLoad}`,
+          role: "assistant",
+          content:
+            "Hello! I'm NEXA AI. How can I help you today?",
+        },
+      ]);
+    }
+  }
+
+  // ============================================================
+  // NEW CHAT
+  // ============================================================
+
+  async function handleNewChat() {
+    if (loading) {
+      return;
+    }
+
+    await createConversation("New Conversation");
+
+    setSidebarOpen(false);
+  }
+
+  // ============================================================
+  // SELECT CONVERSATION
+  // ============================================================
+
+  async function selectConversation(id) {
+    if (loading) {
+      return;
+    }
+
+    setConversationId(id);
+
+    setInput("");
+
+    resetTextarea();
+
+    setSidebarOpen(false);
+
+    setMessages([]);
+
+    console.log(
+      "Selected conversation:",
+      id
+    );
+
+    await loadConversationMessages(id);
+  }
+
+  // ============================================================
+  // RENAME CONVERSATION
+  // ============================================================
+
+  function startRename(conversation) {
+    setEditingConversationId(conversation.id);
+
+    setEditingTitle(conversation.title);
+  }
+
+  async function saveRename(
+    conversationIdToRename
+  ) {
+    const title = editingTitle.trim();
+
+    if (!title) {
+      setEditingConversationId(null);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/conversations/${conversationIdToRename}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            title,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          "Could not rename conversation"
+        );
+      }
+
+      const updated = await response.json();
+
+      setConversations((previous) =>
+        previous.map(
+          (conversation) =>
+            conversation.id ===
+            conversationIdToRename
+              ? updated
+              : conversation
+        )
+      );
+
+      setEditingConversationId(null);
+
+      setEditingTitle("");
+    } catch (error) {
+      console.error(
+        "Rename conversation error:",
+        error
+      );
+    }
+  }
+
+  // ============================================================
+  // DELETE CONVERSATION
+  // ============================================================
+
+  async function deleteConversation(
+    conversationIdToDelete
+  ) {
+    if (loading) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Delete this conversation?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/conversations/${conversationIdToDelete}`,
+        {
+          method: "DELETE",
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          "Could not delete conversation"
+        );
+      }
+
+      const remaining = conversations.filter(
+        (conversation) =>
+          conversation.id !==
+          conversationIdToDelete
+      );
+
+      setConversations(remaining);
+
+      // --------------------------------------------------------
+      // Deleted current conversation
+      // --------------------------------------------------------
+
+      if (
+        conversationId ===
+        conversationIdToDelete
+      ) {
+        if (remaining.length > 0) {
+          setConversationId(remaining[0].id);
+
+          await loadConversationMessages(
+            remaining[0].id
+          );
+        } else {
+          await createConversation();
+        }
+      }
+    } catch (error) {
+      console.error(
+        "Delete conversation error:",
+        error
+      );
+    }
+  }
+
+  // ============================================================
+  // DOCUMENTS: LOAD LIST
+  // ============================================================
+
+  async function loadDocuments() {
+    setDocumentsLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/documents/user/${USER_ID}`,
+        {
+          method: "GET",
+          headers: { Accept: "application/json" },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Could not load documents");
+      }
+
+      const data = await response.json();
+
+      setDocuments(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Load documents error:", error);
+    } finally {
+      setDocumentsLoading(false);
+    }
+  }
+
+  // ============================================================
+  // DOCUMENTS: OPEN MODAL
+  // ============================================================
+
+  function openDocumentsModal() {
+    setDocumentsModalOpen(true);
+    setUploadError("");
+
+    loadDocuments();
+  }
+
+  // ============================================================
+  // DOCUMENTS: UPLOAD
+  // ============================================================
+
+  async function uploadDocumentFile(file) {
+    if (!file) {
+      return;
+    }
+
+    setUploadError("");
+    setIsUploading(true);
+
+    // Only touch the composer chip if it's still showing THIS file —
+    // avoids a stale/slow upload clobbering a newer attachment.
+    const patchChip = (patch) =>
+      setAttachedFile((current) =>
+        current && current.file === file
+          ? { ...current, ...patch }
+          : current
+      );
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/documents/upload?user_id=${USER_ID}`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail || "Upload failed. Please try again."
+        );
+      }
+
+      setDocuments((previous) => [data, ...previous]);
+
+      if (data.status === "failed") {
+        const message =
+          data.error_message ||
+          "This file could not be processed.";
+
+        setUploadError(message);
+        patchChip({ status: "error", error: message });
+      } else {
+        patchChip({ status: "done" });
+      }
+    } catch (error) {
+      console.error("Upload document error:", error);
+
+      const message =
+        error.message || "Upload failed. Please try again.";
+
+      setUploadError(message);
+      patchChip({ status: "error", error: message });
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  function handleFileInputChange(event) {
+    const file = event.target.files?.[0];
+
+    if (file) {
+      setAttachedFile({ file, name: file.name, status: "uploading" });
+    }
+
+    uploadDocumentFile(file);
+
+    event.target.value = "";
+  }
+
+  function removeAttachedFile() {
+    setAttachedFile(null);
+  }
+
+  function retryAttachedFile() {
+    if (!attachedFile?.file) {
+      return;
+    }
+
+    setAttachedFile((current) => ({ ...current, status: "uploading" }));
+
+    uploadDocumentFile(attachedFile.file);
+  }
+
+  function handleDrop(event) {
+    event.preventDefault();
+    setIsDraggingFile(false);
+
+    const file = event.dataTransfer.files?.[0];
+
+    uploadDocumentFile(file);
+  }
+
+  function handleDragOver(event) {
+    event.preventDefault();
+    setIsDraggingFile(true);
+  }
+
+  function handleDragLeave(event) {
+    event.preventDefault();
+    setIsDraggingFile(false);
+  }
+
+  // ============================================================
+  // DOCUMENTS: DELETE
+  // ============================================================
+
+  async function deleteDocument(documentRowId) {
+    const confirmed = window.confirm(
+      "Delete this document? It will be removed from NEXA AI's knowledge base."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/documents/${documentRowId}`,
+        {
+          method: "DELETE",
+          headers: { Accept: "application/json" },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Could not delete document");
+      }
+
+      setDocuments((previous) =>
+        previous.filter(
+          (document) => document.id !== documentRowId
+        )
+      );
+    } catch (error) {
+      console.error("Delete document error:", error);
+    }
+  }
+
+  // ============================================================
+  // PIN / UNPIN CONVERSATION
+  // ============================================================
+
+  async function togglePinConversation(conversation) {
+    const nextPinned = !conversation.is_pinned;
+
+    // Optimistic update — flip it locally right away.
+    setConversations((previous) =>
+      previous.map((item) =>
+        item.id === conversation.id
+          ? { ...item, is_pinned: nextPinned }
+          : item
+      )
+    );
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/conversations/${conversation.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            is_pinned: nextPinned,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Could not update pin state");
+      }
+
+      const updated = await response.json();
+
+      setConversations((previous) =>
+        previous.map((item) =>
+          item.id === conversation.id ? updated : item
+        )
+      );
+    } catch (error) {
+      console.error("Pin conversation error:", error);
+
+      // Roll back the optimistic update on failure.
+      setConversations((previous) =>
+        previous.map((item) =>
+          item.id === conversation.id
+            ? { ...item, is_pinned: conversation.is_pinned }
+            : item
+        )
+      );
+    }
+  }
+
+  // ============================================================
+  // GROUP CONVERSATIONS (search + pinned + date buckets)
+  // ============================================================
+
+  function getConversationGroups(allConversations, query) {
+    const trimmedQuery = query.trim().toLowerCase();
+
+    const filtered = trimmedQuery
+      ? allConversations.filter((conversation) =>
+          (conversation.title || "")
+            .toLowerCase()
+            .includes(trimmedQuery)
+        )
+      : allConversations;
+
+    const pinned = filtered.filter(
+      (conversation) => conversation.is_pinned
+    );
+
+    const unpinned = filtered.filter(
+      (conversation) => !conversation.is_pinned
+    );
+
+    const now = new Date();
+
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfToday.getDate() - 1);
+
+    const startOfWeek = new Date(startOfToday);
+    startOfWeek.setDate(startOfToday.getDate() - 7);
+
+    const buckets = {
+      today: [],
+      yesterday: [],
+      previous7Days: [],
+      older: [],
+    };
+
+    for (const conversation of unpinned) {
+      const createdAt = new Date(conversation.created_at);
+
+      if (createdAt >= startOfToday) {
+        buckets.today.push(conversation);
+      } else if (createdAt >= startOfYesterday) {
+        buckets.yesterday.push(conversation);
+      } else if (createdAt >= startOfWeek) {
+        buckets.previous7Days.push(conversation);
+      } else {
+        buckets.older.push(conversation);
+      }
+    }
+
+    return {
+      pinned,
+      sections: [
+        { key: "today", label: "Today", items: buckets.today },
+        {
+          key: "yesterday",
+          label: "Yesterday",
+          items: buckets.yesterday,
+        },
+        {
+          key: "previous7Days",
+          label: "Previous 7 Days",
+          items: buckets.previous7Days,
+        },
+        { key: "older", label: "Older", items: buckets.older },
+      ].filter((section) => section.items.length > 0),
+      isEmpty: pinned.length === 0 && unpinned.length === 0,
+    };
+  }
+
+  // ============================================================
+  // APPLY AUTO-GENERATED TITLE (from SSE "done" event)
+  // ============================================================
+
+  function applyConversationTitleUpdate(data) {
+    if (!data || !data.conversation) {
+      return;
+    }
+
+    const { id, title } = data.conversation;
+
+    if (!id || !title) {
+      return;
+    }
+
+    setConversations((previous) =>
+      previous.map((conversation) =>
+        conversation.id === id
+          ? { ...conversation, title }
+          : conversation
+      )
+    );
+  }
+
+  // ============================================================
+  // AUTO RESIZE TEXTAREA
+  // ============================================================
+
+  function handleExamplePromptClick(promptText, mode) {
+    setImageMode(mode === "image");
+
+    setInput(promptText);
+
+    requestAnimationFrame(() => {
+      resizeTextarea();
+      textareaRef.current?.focus();
+    });
+  }
+
+  function resizeTextarea() {
+    const textarea = textareaRef.current;
+
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "auto";
+
+    const maxHeight = 180;
+
+    textarea.style.height = `${Math.min(
+      textarea.scrollHeight,
+      maxHeight
+    )}px`;
+  }
+
+  // ============================================================
+  // INPUT CHANGE
+  // ============================================================
+
+  function handleInputChange(event) {
+    setInput(event.target.value);
+
+    requestAnimationFrame(() => {
+      resizeTextarea();
+    });
+  }
+
+  // ============================================================
+  // RESET INPUT HEIGHT
+  // ============================================================
+
+  function resetTextarea() {
+    const textarea = textareaRef.current;
+
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "auto";
+  }
+
+  // ============================================================
+  // KEEP THE CHAT PINNED TO THE BOTTOM AFTER AN IMAGE LOADS
+  // (its final height isn't known until then)
+  // ============================================================
+
+  function handleImageLoaded() {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "auto",
+      block: "end",
+    });
+  }
+
+  // ============================================================
+  // COPY AI RESPONSE
+  // ============================================================
+
+  async function copyMessage(
+    messageId,
+    content
+  ) {
+    try {
+      await navigator.clipboard.writeText(
+        content
+      );
+
+      setCopiedMessageId(messageId);
+
+      setTimeout(() => {
+        setCopiedMessageId(null);
+      }, 1800);
+    } catch (error) {
+      console.error(
+        "Could not copy message:",
+        error
+      );
+    }
+  }
+
+  // ============================================================
+  // VOICE INPUT (SPEECH-TO-TEXT)
+  // ============================================================
+
+  function startListening() {
+    const SpeechRecognitionApi =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
+
+    if (!SpeechRecognitionApi) {
+      console.warn(
+        "Speech recognition is not supported in this browser."
+      );
+      return;
+    }
+
+    // Reading and speaking at the same time is confusing —
+    // stop any response currently being read aloud.
+    stopSpeaking();
+
+    const recognition = new SpeechRecognitionApi();
+
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+
+    let finalTranscript = "";
+
+    recognition.onresult = (event) => {
+      let interimTranscript = "";
+
+      for (
+        let i = event.resultIndex;
+        i < event.results.length;
+        i++
+      ) {
+        const transcriptChunk =
+          event.results[i][0].transcript;
+
+        if (event.results[i].isFinal) {
+          finalTranscript += transcriptChunk;
+        } else {
+          interimTranscript += transcriptChunk;
+        }
+      }
+
+      setInput(
+        (finalTranscript + interimTranscript).trim()
+      );
+
+      requestAnimationFrame(() => {
+        resizeTextarea();
+      });
+    };
+
+    recognition.onerror = (event) => {
+      console.error(
+        "Speech recognition error:",
+        event.error
+      );
+
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    speechRecognitionRef.current = recognition;
+
+    setIsListening(true);
+
+    recognition.start();
+  }
+
+  function stopListening() {
+    speechRecognitionRef.current?.stop();
+
+    setIsListening(false);
+  }
+
+  function toggleListening() {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  }
+
+  // ============================================================
+  // VOICE OUTPUT (TEXT-TO-SPEECH)
+  // ============================================================
+
+  function stripMarkdownForSpeech(markdownText) {
+    return markdownText
+      // Fenced code blocks — don't read code aloud.
+      .replace(/```[\s\S]*?```/g, "code block omitted.")
+      // Inline code.
+      .replace(/`([^`]+)`/g, "$1")
+      // Images / links — keep only the visible label.
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+      // Headings, bold, italics, blockquote/list markers.
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/\*([^*]+)\*/g, "$1")
+      .replace(/^>\s+/gm, "")
+      .replace(/^[-*+]\s+/gm, "")
+      .replace(/^\d+\.\s+/gm, "")
+      .trim();
+  }
+
+  function stopSpeaking() {
+    window.speechSynthesis?.cancel();
+
+    setSpeakingMessageId(null);
+  }
+
+  function speakMessage(messageId, content) {
+    if (
+      typeof window.speechSynthesis === "undefined"
+    ) {
+      return;
+    }
+
+    // Only one message speaks at a time.
+    window.speechSynthesis.cancel();
+
+    if (speakingMessageId === messageId) {
+      // Clicking the same button again just stops it.
+      setSpeakingMessageId(null);
+      return;
+    }
+
+    const cleanedText = stripMarkdownForSpeech(content);
+
+    if (!cleanedText) {
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(
+      cleanedText
+    );
+
+    utterance.rate = 1;
+    utterance.pitch = 1;
+
+    utterance.onend = () => {
+      setSpeakingMessageId(null);
+    };
+
+    utterance.onerror = () => {
+      setSpeakingMessageId(null);
+    };
+
+    setSpeakingMessageId(messageId);
+
+    window.speechSynthesis.speak(utterance);
+  }
+
+  // ============================================================
+  // SEND MESSAGE
+  // ============================================================
+
+  async function sendMessage(overrideText) {
+    const isRetry = overrideText !== undefined;
+
+    const text = (isRetry ? overrideText : input).trim();
+
+    if (!text) {
+      return;
+    }
+
+    if (loading) {
+      return;
+    }
+
+    if (!conversationId) {
+      console.warn(
+        "Conversation is not ready yet."
+      );
+
+      return;
+    }
+
+    // ========================================================
+    // IMAGE REQUEST ("image mode" toggle or /image command)
+    // ========================================================
+
+    const imageCommand = parseImageCommand(text);
+
+    if (imageMode || imageCommand) {
+      const imagePrompt = imageCommand ? imageCommand.prompt : text;
+
+      setInput("");
+
+      resetTextarea();
+
+      if (!imagePrompt) {
+        // A bare "/image" just switches the composer to image mode.
+        setImageMode(true);
+
+        return;
+      }
+
+      stopSpeaking();
+
+      setImageMode(false);
+
+      // Image mode and a composer attachment don't really combine —
+      // drop the (unrelated) chip so it doesn't linger stale.
+      setAttachedFile(null);
+
+      generateImage(imagePrompt);
+
+      return;
+    }
+
+    stopSpeaking();
+
+    // ========================================================
+    // USER MESSAGE
+    // ========================================================
+
+    const userClientId = `user-${Date.now()}`;
+
+    // Snapshot the composer's attachment chip onto this message so
+    // it keeps showing (e.g. "uploading") even after the chip itself
+    // is cleared below — same idea as how `text` is captured before
+    // `input` gets cleared.
+    const messageAttachment =
+      !isRetry && attachedFile
+        ? { name: attachedFile.name, status: attachedFile.status }
+        : null;
+
+    const userMessage = {
+      id: userClientId,
+      // Stable React key — `id` gets replaced by the server id.
+      clientId: userClientId,
+      role: "user",
+      content: text,
+      attachment: messageAttachment,
+    };
+
+    setMessages((previous) => [
+      ...previous,
+      userMessage,
+    ]);
+
+    if (!isRetry) {
+      setInput("");
+
+      resetTextarea();
+
+      setAttachedFile(null);
+    }
+
+    setLoading(true);
+
+    // ========================================================
+    // EMPTY ASSISTANT MESSAGE
+    // ========================================================
+
+    const assistantId =
+      `assistant-${Date.now()}`;
+
+    setMessages((previous) => [
+      ...previous,
+      {
+        id: assistantId,
+        clientId: assistantId,
+        role: "assistant",
+        content: "",
+      },
+    ]);
+
+    try {
+      // ======================================================
+      // STREAMING API REQUEST
+      // ======================================================
+
+      const response = await fetch(
+        `${API_BASE_URL}/conversations/${conversationId}/messages/stream`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
+          body: JSON.stringify({
+            content: text,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+
+        throw new Error(
+          errorText ||
+            `Request failed with status ${response.status}`
+        );
+      }
+
+      if (!response.body) {
+        throw new Error(
+          "Streaming is not supported by this browser."
+        );
+      }
+
+      const reader =
+        response.body.getReader();
+
+      const decoder =
+        new TextDecoder("utf-8");
+
+      let buffer = "";
+
+      // ======================================================
+      // READ STREAM
+      // ======================================================
+
+      while (true) {
+        const {
+          value,
+          done,
+        } = await reader.read();
+
+        if (done) {
+          break;
+        }
+
+        buffer += decoder.decode(
+          value,
+          {
+            stream: true,
+          }
+        );
+
+        const events =
+          buffer.split(
+            /\r?\n\r?\n/
+          );
+
+        buffer =
+          events.pop() || "";
+
+        // ====================================================
+        // PROCESS EVENTS
+        // ====================================================
+
+        for (const event of events) {
+          const lines =
+            event.split(/\r?\n/);
+
+          for (const line of lines) {
+            if (
+              !line.startsWith(
+                "data:"
+              )
+            ) {
+              continue;
+            }
+
+            const jsonText =
+              line
+                .slice(5)
+                .trim();
+
+            if (!jsonText) {
+              continue;
+            }
+
+            let data;
+
+            try {
+              data =
+                JSON.parse(
+                  jsonText
+                );
+            } catch (error) {
+              console.warn(
+                "Invalid streaming event:",
+                jsonText
+              );
+
+              continue;
+            }
+
+            // ----------------------------------------------
+            // TEXT CHUNK
+            // ----------------------------------------------
+
+            if (
+              data.type ===
+              "chunk"
+            ) {
+              const chunk =
+                data.content ||
+                "";
+
+              if (!chunk) {
+                continue;
+              }
+
+              setMessages(
+                (previous) =>
+                  previous.map(
+                    (message) =>
+                      message.id ===
+                      assistantId
+                        ? {
+                            ...message,
+                            content:
+                              message.content +
+                              chunk,
+                          }
+                        : message
+                  )
+              );
+            }
+
+            // ----------------------------------------------
+            // STREAM COMPLETE
+            // ----------------------------------------------
+
+            else if (
+              data.type ===
+              "done"
+            ) {
+              if (
+                data.message
+              ) {
+                setMessages(
+                  (previous) =>
+                    previous.map(
+                      (message) =>
+                        message.id ===
+                        assistantId
+                          ? {
+                              ...message,
+                              id:
+                                data.message
+                                  .id ||
+                                assistantId,
+                              content:
+                                data.message
+                                  .content ||
+                                message.content,
+                              sources:
+                                data.message
+                                  .sources ||
+                                null,
+                            }
+                          : message
+                    )
+                );
+              }
+
+              applyConversationTitleUpdate(data);
+
+              console.log(
+                "NEXA AI response completed."
+              );
+            }
+
+            // ----------------------------------------------
+            // BACKEND ERROR
+            // ----------------------------------------------
+
+            else if (
+              data.type ===
+              "error"
+            ) {
+              throw new Error(
+                data.message ||
+                  "AI service temporarily unavailable."
+              );
+            }
+          }
+        }
+      }
+
+      // ======================================================
+      // FINAL BUFFER
+      // ======================================================
+
+      if (buffer.trim()) {
+        const lines =
+          buffer.split(/\r?\n/);
+
+        for (const line of lines) {
+          if (
+            !line.startsWith(
+              "data:"
+            )
+          ) {
+            continue;
+          }
+
+          const jsonText =
+            line
+              .slice(5)
+              .trim();
+
+          if (!jsonText) {
+            continue;
+          }
+
+          try {
+            const data =
+              JSON.parse(
+                jsonText
+              );
+
+            if (
+              data.type ===
+                "chunk" &&
+              data.content
+            ) {
+              setMessages(
+                (previous) =>
+                  previous.map(
+                    (message) =>
+                      message.id ===
+                      assistantId
+                        ? {
+                            ...message,
+                            content:
+                              message.content +
+                              data.content,
+                          }
+                        : message
+                  )
+              );
+            }
+
+            if (
+              data.type ===
+                "done" &&
+              data.message
+            ) {
+              setMessages(
+                (previous) =>
+                  previous.map(
+                    (message) =>
+                      message.id ===
+                      assistantId
+                        ? {
+                            ...message,
+                            id:
+                              data.message
+                                .id ||
+                              assistantId,
+                            content:
+                              data.message
+                                .content ||
+                              message.content,
+                            sources:
+                              data.message
+                                .sources ||
+                              null,
+                          }
+                        : message
+                  )
+              );
+
+              applyConversationTitleUpdate(data);
+            }
+          } catch (error) {
+            console.warn(
+              "Could not parse final event:",
+              jsonText
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.error(
+        "NEXA AI streaming error:",
+        error
+      );
+
+      setMessages(
+        (previous) =>
+          previous.map(
+            (message) =>
+              message.id ===
+              assistantId
+                ? {
+                    ...message,
+                    content: "",
+                    kind: "chat-error",
+                    error:
+                      "Sorry, I couldn't get a response. Please try again.",
+                    prompt: text,
+                  }
+                : message
+          )
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ============================================================
+  // RETRY A FAILED CHAT MESSAGE
+  // (mirrors retryImageGeneration: drop the failed pair, resend)
+  // ============================================================
+
+  function retryChatMessage(failedClientId, promptText) {
+    setMessages((previous) => {
+      const index = previous.findIndex(
+        (message) => message.clientId === failedClientId
+      );
+
+      if (index === -1) {
+        return previous;
+      }
+
+      const promptBubble = previous[index - 1];
+
+      const dropPromptBubble =
+        promptBubble?.role === "user" &&
+        promptBubble.content === promptText;
+
+      return previous.filter(
+        (_, position) =>
+          position !== index &&
+          !(dropPromptBubble && position === index - 1)
+      );
+    });
+
+    sendMessage(promptText);
+  }
+
+  // ============================================================
+  // KEYBOARD HANDLING
+  // ============================================================
+
+  function handleKeyDown(event) {
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey
+    ) {
+      event.preventDefault();
+
+      sendMessage();
+    }
+  }
+
+  // ============================================================
+  // CURRENT CONVERSATION
+  // ============================================================
+
+  const isCreatingImage = messages.some(
+    (message) => message.kind === "image-pending"
+  );
+
+  const currentConversation =
+    conversations.find(
+      (conversation) =>
+        conversation.id ===
+        conversationId
+    );
+
+  const conversationGroups = getConversationGroups(
+    conversations,
+    searchQuery
+  );
+
+  // ============================================================
+  // RENDER ONE CONVERSATION ITEM (shared by pinned + grouped)
+  // ============================================================
+
+  function renderConversationItem(conversation) {
+    return (
+      <div
+        key={conversation.id}
+        className={`conversation-item ${
+          conversation.id === conversationId
+            ? "active"
+            : ""
+        } ${
+          conversation.is_pinned ? "pinned-item" : ""
+        }`}
+      >
+        {editingConversationId === conversation.id ? (
+          <input
+            className="conversation-edit-input"
+            value={editingTitle}
+            onChange={(event) =>
+              setEditingTitle(event.target.value)
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                saveRename(conversation.id);
+              }
+
+              if (event.key === "Escape") {
+                setEditingConversationId(null);
+              }
+            }}
+            onBlur={() => saveRename(conversation.id)}
+            autoFocus
+          />
+        ) : (
+          <>
+            <button
+              className="conversation-main"
+              onClick={() =>
+                selectConversation(conversation.id)
+              }
+              type="button"
+            >
+              <span className="conversation-icon">○</span>
+
+              <span className="conversation-title">
+                {conversation.title}
+              </span>
+            </button>
+
+            <div className="conversation-menu-wrapper">
+              <button
+                type="button"
+                className="conversation-action menu-trigger"
+                onClick={(event) => {
+                  event.stopPropagation();
+
+                  setOpenMenuConversationId(
+                    openMenuConversationId ===
+                      conversation.id
+                      ? null
+                      : conversation.id
+                  );
+                }}
+                title="More options"
+                aria-label="More options"
+              >
+                ⋮
+              </button>
+
+              {openMenuConversationId ===
+                conversation.id && (
+                <div className="conversation-menu">
+                  <button
+                    type="button"
+                    className="conversation-menu-item"
+                    onClick={() => {
+                      togglePinConversation(conversation);
+                      setOpenMenuConversationId(null);
+                    }}
+                  >
+                    <span className="conversation-menu-icon">
+                      <PinIcon filled={conversation.is_pinned} />
+                    </span>
+
+                    {conversation.is_pinned
+                      ? "Unpin"
+                      : "Pin"}
+
+                    <span className="conversation-menu-shortcut">
+                      P
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="conversation-menu-item"
+                    onClick={() => {
+                      startRename(conversation);
+                      setOpenMenuConversationId(null);
+                    }}
+                  >
+                    <span className="conversation-menu-icon">
+                      <PencilIcon />
+                    </span>
+
+                    Rename
+
+                    <span className="conversation-menu-shortcut">
+                      R
+                    </span>
+                  </button>
+
+                  <div className="conversation-menu-divider" />
+
+                  <button
+                    type="button"
+                    className="conversation-menu-item delete"
+                    onClick={() => {
+                      setOpenMenuConversationId(null);
+                      deleteConversation(conversation.id);
+                    }}
+                  >
+                    <span className="conversation-menu-icon">
+                      <TrashIcon />
+                    </span>
+
+                    Delete
+
+                    <span className="conversation-menu-shortcut">
+                      D
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // ============================================================
+  // RENDER
+  // ============================================================
+
+  return (
+    <div
+      className={`app ${sidebarResizing ? "is-resizing" : ""}`}
+      style={{ "--sidebar-width": `${sidebarWidth}px` }}
+    >
+
+      {/* ======================================================
+          MOBILE OVERLAY
+      ====================================================== */}
+
+      {sidebarOpen && (
+        <div
+          className="sidebar-overlay"
+          onClick={() =>
+            setSidebarOpen(false)
+          }
+        />
+      )}
+
+      {/* ======================================================
+          SIDEBAR
+      ====================================================== */}
+
+      <aside
+        className={`sidebar ${
+          sidebarOpen
+            ? "sidebar-open"
+            : ""
+        }`}
+      >
+
+        {/* SIDEBAR HEADER */}
+
+        <div className="sidebar-header">
+
+          <div className="sidebar-brand">
+
+            <div className="sidebar-logo">
+              N
+            </div>
+
+            <div>
+              <h2>NEXA AI</h2>
+
+              <span>
+                Intelligent AI Assistant
+              </span>
+            </div>
+
+          </div>
+
+          <button
+            className="sidebar-close"
+            onClick={() =>
+              setSidebarOpen(false)
+            }
+            type="button"
+            aria-label="Close sidebar"
+          >
+            ×
+          </button>
+
+        </div>
+
+        {/* NEW CHAT */}
+
+        <button
+          className="new-chat-button"
+          onClick={handleNewChat}
+          disabled={loading}
+          type="button"
+        >
+          <span className="new-chat-icon">
+            +
+          </span>
+
+          <span>
+            New Chat
+          </span>
+        </button>
+
+        {/* DOCUMENTS */}
+
+        <button
+          className="documents-button"
+          onClick={openDocumentsModal}
+          type="button"
+        >
+          <FileIcon />
+
+          <span>Documents</span>
+
+          {documents.length > 0 && (
+            <span className="documents-button-count">
+              {documents.length}
+            </span>
+          )}
+        </button>
+
+        {/* SEARCH */}
+
+        <div className="sidebar-search">
+          <span className="sidebar-search-icon">⌕</span>
+
+          <input
+            type="text"
+            className="sidebar-search-input"
+            placeholder="Search conversations..."
+            value={searchQuery}
+            onChange={(event) =>
+              setSearchQuery(event.target.value)
+            }
+          />
+
+          {searchQuery && (
+            <button
+              type="button"
+              className="sidebar-search-clear"
+              onClick={() => setSearchQuery("")}
+              aria-label="Clear search"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        {/* CONVERSATION TITLE */}
+
+        <div className="conversation-heading">
+          <span>
+            Conversations
+          </span>
+
+          <span className="conversation-count">
+            {conversations.length}
+          </span>
+        </div>
+
+        {/* CONVERSATIONS */}
+
+        <div className="conversation-list">
+
+          {conversationGroups.isEmpty ? (
+            <div className="empty-conversations">
+              {searchQuery
+                ? "No conversations match your search"
+                : "No conversations yet"}
+            </div>
+          ) : (
+            <>
+              {conversationGroups.pinned.length > 0 && (
+                <div className="conversation-section">
+                  <div className="conversation-section-label">
+                    Pinned
+                  </div>
+
+                  {conversationGroups.pinned.map(
+                    (conversation) =>
+                      renderConversationItem(conversation)
+                  )}
+                </div>
+              )}
+
+              {conversationGroups.sections.map((section) => (
+                <div
+                  key={section.key}
+                  className="conversation-section"
+                >
+                  <div className="conversation-section-label">
+                    {section.label}
+                  </div>
+
+                  {section.items.map((conversation) =>
+                    renderConversationItem(conversation)
+                  )}
+                </div>
+              ))}
+            </>
+          )}
+
+        </div>
+
+        {/* SIDEBAR FOOTER */}
+
+        <div className="sidebar-footer">
+
+          <div className="sidebar-status-dot" />
+
+          <span>
+            NEXA AI is online
+          </span>
+
+        </div>
+
+      </aside>
+
+      {/* ======================================================
+          SIDEBAR RESIZE HANDLE (drag left/right)
+      ====================================================== */}
+
+      <div className="sidebar-resizer" {...sidebarResizeProps} />
+
+      {/* ======================================================
+          MAIN AREA
+      ====================================================== */}
+
+      <div className="main-area">
+
+        {/* ====================================================
+            HEADER
+        ==================================================== */}
+
+        <header className="header">
+
+          <div className="header-left">
+
+            <button
+              className="menu-button"
+              onClick={() =>
+                setSidebarOpen(true)
+              }
+              type="button"
+              aria-label="Open conversations"
+            >
+              ☰
+            </button>
+
+            <div className="brand">
+
+              <div className="brand-logo">
+                N
+              </div>
+
+              <div className="brand-text">
+
+                <h1>
+                  {currentConversation?.title ||
+                    "NEXA AI"}
+                </h1>
+
+                <p>
+                  Intelligent AI Assistant
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          <div className="header-right">
+
+            <button
+              type="button"
+              className="theme-toggle-button"
+              onClick={cycleTheme}
+              aria-label={`Theme: ${theme}. Click to switch.`}
+              title={`Theme: ${theme === "dark" ? "Midnight" : "Vibrant"} — click to switch`}
+            >
+              {theme === "dark" ? <MoonIcon /> : <SparkleThemeIcon />}
+            </button>
+
+            <div className="status">
+
+              <span className="status-dot" />
+
+              <span>
+                Online
+              </span>
+
+            </div>
+
+          </div>
+
+        </header>
+
+        {/* ====================================================
+            CHAT
+        ==================================================== */}
+
+        <main className="chat-container">
+
+          <div className="chat-content">
+
+            {messages.length === 1 &&
+            String(messages[0].id).startsWith(
+              "welcome"
+            ) ? (
+              <EmptyState
+                onPromptClick={handleExamplePromptClick}
+              />
+            ) : (
+              messages.map(
+                (message) => {
+
+                  const isUser =
+                    message.role ===
+                    "user";
+
+                const isAssistant =
+                  message.role ===
+                  "assistant";
+
+                const isStreaming =
+                  loading &&
+                  isAssistant &&
+                  message.id ===
+                    messages[
+                      messages.length -
+                        1
+                    ]?.id;
+
+                return (
+                  <div
+                    key={message.clientId ?? message.id}
+                    className={`message-row ${
+                      isUser
+                        ? "user-row"
+                        : "assistant-row"
+                    }`}
+                  >
+
+                    {/* ASSISTANT AVATAR */}
+
+                    {isAssistant && (
+                      <div
+                        className={`avatar assistant-avatar ${
+                          isStreaming ? "active" : ""
+                        }`}
+                      >
+                        N
+                      </div>
+                    )}
+
+                    {/* MESSAGE */}
+
+                    <div className="message-wrapper">
+
+                      <div className="message-header">
+
+                        <span className="message-name">
+                          {isUser
+                            ? "You"
+                            : "NEXA AI"}
+                        </span>
+
+                      </div>
+
+                      <div
+                        className={`message-bubble ${
+                          isUser
+                            ? "user-message"
+                            : "assistant-message"
+                        }`}
+                      >
+
+                        {isAssistant ? (
+                          message.kind === "chat-error" ? (
+                            <ImageErrorCard
+                              title="Couldn't get a response"
+                              message={message.error}
+                              retryDisabled={loading}
+                              onRetry={() =>
+                                retryChatMessage(
+                                  message.clientId,
+                                  message.prompt
+                                )
+                              }
+                            />
+                          ) : message.kind === "image-pending" ? (
+                            <ImageGeneratingCard
+                              startedAt={message.startedAt}
+                              onCancel={cancelImageGeneration}
+                            />
+                          ) : message.kind === "image-error" ? (
+                            <ImageErrorCard
+                              message={message.error}
+                              cancelled={message.cancelled}
+                              retryDisabled={loading}
+                              onRetry={() =>
+                                retryImageGeneration(
+                                  message.clientId,
+                                  message.prompt
+                                )
+                              }
+                            />
+                          ) : message.image ? (
+                            <GeneratedImage
+                              src={message.image.src}
+                              prompt={message.image.prompt}
+                              caption={message.content}
+                              onRegenerate={generateImage}
+                              regenerateDisabled={loading}
+                              // Only freshly generated images (which
+                              // have a clientId) re-scroll on load;
+                              // history images lazy-load as you
+                              // scroll up and must not yank the view.
+                              onLoad={
+                                message.clientId
+                                  ? handleImageLoaded
+                                  : undefined
+                              }
+                            />
+                          ) : message.content ? (
+                            <div className="markdown-content">
+
+                              <ReactMarkdown
+                                remarkPlugins={[
+                                  remarkGfm,
+                                ]}
+                                components={{
+                                  a: ({
+                                    node,
+                                    ...props
+                                  }) => (
+                                    <a
+                                      {...props}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    />
+                                  ),
+
+                                  code: ({
+                                    node,
+                                    className,
+                                    children,
+                                    ...props
+                                  }) => {
+                                    // react-markdown v9+ no
+                                    // longer passes an `inline`
+                                    // prop. Fenced code blocks
+                                    // always get a
+                                    // `language-xxx` className;
+                                    // inline code spans never
+                                    // do. Multi-line content
+                                    // with no language (a bare
+                                    // ``` fence) is treated as
+                                    // a block too.
+                                    const contentText = String(
+                                      children
+                                    );
+
+                                    const isBlock =
+                                      Boolean(className) ||
+                                      contentText.includes(
+                                        "\n"
+                                      );
+
+                                    const isMermaid =
+                                      className ===
+                                      "language-mermaid";
+
+                                    if (isMermaid) {
+                                      const diagramCode = contentText.replace(
+                                        /\n$/,
+                                        ""
+                                      );
+
+                                      if (isStreaming) {
+                                        // Wait for the full
+                                        // diagram before
+                                        // attempting to render
+                                        // — partial Mermaid
+                                        // syntax always fails.
+                                        return (
+                                          <div className="mermaid-pending">
+                                            Preparing diagram...
+                                          </div>
+                                        );
+                                      }
+
+                                      return (
+                                        <MermaidDiagram
+                                          code={diagramCode}
+                                        />
+                                      );
+                                    }
+
+                                    return !isBlock ? (
+                                      <code
+                                        className="inline-code"
+                                        {...props}
+                                      >
+                                        {children}
+                                      </code>
+                                    ) : (
+                                      <pre className="code-block">
+                                        <code
+                                          className={className}
+                                          {...props}
+                                        >
+                                          {children}
+                                        </code>
+                                      </pre>
+                                    );
+                                  },
+                                }}
+                              >
+                                {message.content}
+                              </ReactMarkdown>
+
+                            </div>
+                          ) : (
+                            <div className="thinking-state">
+
+                              <span />
+                              <span />
+                              <span />
+
+                            </div>
+                          )
+                        ) : (
+                          <>
+                            {message.attachment && (
+                              <div className="message-attachment-pill">
+                                <FileIcon size={13} />
+                                <span>{message.attachment.name}</span>
+                              </div>
+                            )}
+
+                            <div className="user-text">
+                              {message.content}
+                            </div>
+                          </>
+                        )}
+
+                        {isStreaming &&
+                          message.content && (
+                            <span className="streaming-cursor">
+                              ▌
+                            </span>
+                          )}
+
+                      </div>
+
+                      {/* SOURCES */}
+
+                      {isAssistant &&
+                        !isStreaming &&
+                        message.sources &&
+                        message.sources.length >
+                          0 && (
+                          <div className="message-sources">
+                            <FileIcon size={12} />
+
+                            <span>
+                              Sources:{" "}
+                              {message.sources
+                                .map(
+                                  (item) =>
+                                    item.source
+                                )
+                                .join(", ")}
+                            </span>
+                          </div>
+                        )}
+
+                      {/* MESSAGE ACTIONS */}
+
+                      {isAssistant &&
+                        message.content &&
+                        !message.image &&
+                        !isStreaming && (
+                          <div className="message-actions">
+                            <button
+                              className="copy-button"
+                              onClick={() =>
+                                copyMessage(
+                                  message.id,
+                                  message.content
+                                )
+                              }
+                              type="button"
+                            >
+                              {
+                                copiedMessageId ===
+                                message.id
+                                  ? "Copied"
+                                  : "Copy"
+                              }
+                            </button>
+
+                            {typeof window !==
+                              "undefined" &&
+                              window.speechSynthesis && (
+                                <button
+                                  className={`speak-button ${
+                                    speakingMessageId ===
+                                    message.id
+                                      ? "speaking"
+                                      : ""
+                                  }`}
+                                  onClick={() =>
+                                    speakMessage(
+                                      message.id,
+                                      message.content
+                                    )
+                                  }
+                                  type="button"
+                                  aria-label={
+                                    speakingMessageId ===
+                                    message.id
+                                      ? "Stop reading aloud"
+                                      : "Read aloud"
+                                  }
+                                  title={
+                                    speakingMessageId ===
+                                    message.id
+                                      ? "Stop"
+                                      : "Read aloud"
+                                  }
+                                >
+                                  <SpeakerIcon
+                                    active={
+                                      speakingMessageId ===
+                                      message.id
+                                    }
+                                  />
+
+                                  {speakingMessageId ===
+                                  message.id
+                                    ? "Stop"
+                                    : "Listen"}
+                                </button>
+                              )}
+                          </div>
+                        )}
+
+                    </div>
+
+                    {/* USER AVATAR */}
+
+                    {isUser && (
+                      <div className="avatar user-avatar">
+                        D
+                      </div>
+                    )}
+
+                  </div>
+                );
+                }
+              )
+            )}
+
+            <div ref={messagesEndRef} className="chat-end-anchor" />
+
+          </div>
+
+        </main>
+
+        {/* ====================================================
+            INPUT
+        ==================================================== */}
+
+        <footer className="input-section">
+
+          {attachedFile && (
+            <div
+              className={`composer-attachment-chip ${
+                attachedFile.status === "error" ? "is-error" : ""
+              }`}
+            >
+              <span className="composer-attachment-chip-icon">
+                {attachedFile.status === "error" ? (
+                  <AlertIcon size={15} />
+                ) : (
+                  <FileIcon size={15} />
+                )}
+              </span>
+
+              <span className="composer-attachment-chip-text">
+                <span className="composer-attachment-chip-name">
+                  {attachedFile.name}
+                </span>
+
+                <span className="composer-attachment-chip-status">
+                  {attachedFile.status === "uploading"
+                    ? "Uploading..."
+                    : attachedFile.status === "error"
+                    ? attachedFile.error || "Upload failed"
+                    : "Ready — added to NEXA AI's knowledge base"}
+                </span>
+              </span>
+
+              {attachedFile.status === "error" && (
+                <button
+                  type="button"
+                  className="composer-attachment-chip-action"
+                  onClick={retryAttachedFile}
+                  aria-label="Retry upload"
+                  title="Retry upload"
+                >
+                  <RefreshIcon size={13} />
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="composer-attachment-chip-action"
+                onClick={removeAttachedFile}
+                aria-label="Remove attachment"
+                title="Remove"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          <div className="input-container">
+
+            <div className="composer-menu-wrapper">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.txt,.md,.csv,.xlsx"
+                onChange={handleFileInputChange}
+                style={{ display: "none" }}
+              />
+
+              <button
+                type="button"
+                className="composer-plus-button"
+                onClick={() =>
+                  setComposerMenuOpen((current) => !current)
+                }
+                disabled={!conversationId || loading}
+                aria-label="Add document or image"
+                aria-expanded={composerMenuOpen}
+                title="Upload a document or create an image"
+              >
+                <PlusIcon />
+              </button>
+
+              {composerMenuOpen && (
+                <div className="composer-menu">
+                  <button
+                    type="button"
+                    className="composer-menu-item"
+                    onClick={() => {
+                      setComposerMenuOpen(false);
+                      fileInputRef.current?.click();
+                    }}
+                  >
+                    <span className="composer-menu-icon">
+                      <DocumentPlusIcon />
+                    </span>
+
+                    Upload document
+                  </button>
+
+                  <button
+                    type="button"
+                    className="composer-menu-item"
+                    onClick={() => {
+                      setComposerMenuOpen(false);
+                      setImageMode(true);
+                      textareaRef.current?.focus();
+                    }}
+                  >
+                    <span className="composer-menu-icon">
+                      <ImageIcon size={16} />
+                    </span>
+
+                    Create image
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                isListening
+                  ? "Listening..."
+                  : imageMode
+                  ? "Describe the image you want to create..."
+                  : conversationId
+                  ? "Ask NEXA AI anything..."
+                  : "Connecting to NEXA AI..."
+              }
+              rows="1"
+              disabled={!conversationId}
+            />
+
+            <button
+              type="button"
+              className="image-toggle-button"
+              onClick={() => setImageMode((current) => !current)}
+              aria-pressed={imageMode}
+              disabled={!conversationId || loading}
+              aria-label={
+                imageMode ? "Turn off image mode" : "Create an image"
+              }
+              title={
+                imageMode
+                  ? "Image mode on — click to turn off"
+                  : "Create an image"
+              }
+            >
+              <ImageIcon />
+            </button>
+
+            {speechSupported && (
+              <button
+                type="button"
+                className={`mic-button ${
+                  isListening ? "listening" : ""
+                }`}
+                onClick={toggleListening}
+                disabled={!conversationId}
+                aria-label={
+                  isListening
+                    ? "Stop voice input"
+                    : "Start voice input"
+                }
+                title={
+                  isListening
+                    ? "Stop listening"
+                    : "Speak your message"
+                }
+              >
+                <MicIcon />
+              </button>
+            )}
+
+            <button
+              className="send-button"
+              onClick={() => sendMessage()}
+              disabled={
+                loading ||
+                !input.trim() ||
+                !conversationId
+              }
+              aria-label={imageMode ? "Create image" : "Send message"}
+            >
+              ➤
+            </button>
+
+          </div>
+
+          <p className="input-hint">
+
+            {isUploading ? (
+              "Uploading document..."
+            ) : loading ? (
+              isCreatingImage ? (
+                "Creating your image..."
+              ) : (
+                "NEXA AI is generating a response..."
+              )
+            ) : imageMode ? (
+              <>
+                <span className="input-hint-mode">Image mode</span>
+                {" • Enter to create • Shift + Enter for a new line"}
+              </>
+            ) : (
+              "Enter to send • Shift + Enter for a new line • /image to create an image"
+            )}
+
+          </p>
+
+        </footer>
+
+      </div>
+
+      {/* ======================================================
+          DOCUMENTS MODAL
+      ====================================================== */}
+
+      {documentsModalOpen && (
+        <div
+          className="documents-modal-overlay"
+          onClick={() => setDocumentsModalOpen(false)}
+        >
+          <div
+            className="documents-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="documents-modal-header">
+              <div>
+                <h2>Documents</h2>
+                <p>
+                  Upload files to add them to NEXA AI's
+                  knowledge base
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="documents-modal-close"
+                onClick={() => setDocumentsModalOpen(false)}
+                aria-label="Close"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            <div
+              className={`documents-dropzone ${
+                isDraggingFile ? "dragging" : ""
+              } ${isUploading ? "uploading" : ""}`}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onClick={() =>
+                !isUploading && fileInputRef.current?.click()
+              }
+            >
+              <UploadCloudIcon />
+
+              <p className="documents-dropzone-title">
+                {isUploading
+                  ? "Uploading..."
+                  : "Click to upload or drag a file here"}
+              </p>
+
+              <p className="documents-dropzone-hint">
+                PDF, Word, TXT, Markdown, CSV, Excel — up to
+                20MB
+              </p>
+            </div>
+
+            {uploadError && (
+              <div className="documents-upload-error">
+                {uploadError}
+              </div>
+            )}
+
+            <div className="documents-list">
+              {documentsLoading ? (
+                <div className="documents-empty">
+                  Loading documents...
+                </div>
+              ) : documents.length === 0 ? (
+                <div className="documents-empty">
+                  No documents uploaded yet
+                </div>
+              ) : (
+                documents.map((document) => (
+                  <div
+                    key={document.id}
+                    className="document-row"
+                  >
+                    <div className="document-row-icon">
+                      <FileIcon />
+                    </div>
+
+                    <div className="document-row-info">
+                      <span className="document-row-name">
+                        {document.filename}
+                      </span>
+
+                      <span className="document-row-meta">
+                        {document.file_type.toUpperCase()}
+                        {" · "}
+                        {document.status === "completed" &&
+                          `${document.chunk_count} chunks indexed`}
+                        {document.status === "processing" &&
+                          "Processing..."}
+                        {document.status === "failed" &&
+                          (document.error_message ||
+                            "Failed to process")}
+                      </span>
+                    </div>
+
+                    <span
+                      className={`document-status-badge ${document.status}`}
+                    >
+                      {document.status}
+                    </span>
+
+                    <button
+                      type="button"
+                      className="document-row-delete"
+                      onClick={() =>
+                        deleteDocument(document.id)
+                      }
+                      aria-label="Delete document"
+                      title="Delete"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+export default App;

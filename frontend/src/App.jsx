@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import mermaid from "mermaid";
 import "./App.css";
 import "./ImageGeneration.css";
-import "./Mobile.css";
 import "./Sidebar.css";
+import "./Mobile.css";
 import { useResizableSidebar } from "./hooks/useResizableSidebar";
 
 import { API_BASE_URL } from "./services/api";
@@ -189,14 +189,31 @@ function SpeakerIcon({ active = false }) {
 
 mermaid.initialize({
   startOnLoad: false,
-  theme: "dark",
+  theme: "base",
   securityLevel: "strict",
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', " +
     "Roboto, Helvetica, Arial, sans-serif",
+  themeVariables: {
+    background: "#0b0c11",
+    primaryColor: "#1e1b3a",
+    primaryBorderColor: "#6d67f4",
+    primaryTextColor: "#f5f5f7",
+    secondaryColor: "#2a1f4d",
+    tertiaryColor: "#14121f",
+    lineColor: "#a5a1ff",
+    textColor: "#e4e4e9",
+    clusterBkg: "#15122a",
+    clusterBorder: "#6d67f4",
+    edgeLabelBackground: "#0b0c11",
+  },
   flowchart: {
     htmlLabels: false,
     useMaxWidth: false,
+    padding: 16,
+    nodeSpacing: 40,
+    rankSpacing: 50,
+    subGraphTitleMargin: { top: 12, bottom: 12 },
   },
   sequence: {
     useMaxWidth: false,
@@ -206,28 +223,20 @@ mermaid.initialize({
   },
 });
 
-let mermaidDiagramCounter = 0;
-
 function MermaidDiagram({ code }) {
   const [svg, setSvg] = useState("");
   const [error, setError] = useState(null);
 
-  const idRef = useRef(null);
-
-  if (idRef.current === null) {
-    mermaidDiagramCounter += 1;
-    idRef.current = `nexa-mermaid-${mermaidDiagramCounter}`;
-  }
+  // useId is pure and stable per instance; mermaid needs a CSS-safe id.
+  const reactId = useId();
+  const diagramId = `nexa-mermaid-${reactId.replace(/[^a-zA-Z0-9]/g, "")}`;
 
   useEffect(() => {
     let cancelled = false;
 
     async function renderDiagram() {
       try {
-        const { svg: renderedSvg } = await mermaid.render(
-          idRef.current,
-          code
-        );
+        const { svg: renderedSvg } = await mermaid.render(diagramId, code);
 
         if (!cancelled) {
           setSvg(renderedSvg);
@@ -247,7 +256,7 @@ function MermaidDiagram({ code }) {
     return () => {
       cancelled = true;
     };
-  }, [code]);
+  }, [code, diagramId]);
 
   if (error) {
     return (
@@ -337,6 +346,13 @@ function EmptyState({ onPromptClick }) {
   );
 }
 
+let clientIdSequence = 0;
+
+function newClientId(prefix) {
+  clientIdSequence += 1;
+  return `${prefix}-${Date.now()}-${clientIdSequence}`;
+}
+
 function App() {
   // ============================================================
   // STATE
@@ -378,7 +394,7 @@ function App() {
   const [documents, setDocuments] = useState([]);
 
   const [documentsLoading, setDocumentsLoading] =
-    useState(false);
+    useState(true);
 
   const [isUploading, setIsUploading] = useState(false);
 
@@ -388,7 +404,16 @@ function App() {
 
   const [isListening, setIsListening] = useState(false);
 
-  const [speechSupported, setSpeechSupported] = useState(true);
+  const [speechSupported] = useState(() => {
+    const SpeechRecognitionApi =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
+
+    return (
+      Boolean(SpeechRecognitionApi) &&
+      typeof window.speechSynthesis !== "undefined"
+    );
+  });
 
   const [speakingMessageId, setSpeakingMessageId] =
     useState(null);
@@ -494,17 +519,6 @@ function App() {
   // ============================================================
 
   useEffect(() => {
-    const SpeechRecognitionApi =
-      window.SpeechRecognition ||
-      window.webkitSpeechRecognition;
-
-    const hasSpeechSynthesis =
-      typeof window.speechSynthesis !== "undefined";
-
-    setSpeechSupported(
-      Boolean(SpeechRecognitionApi) && hasSpeechSynthesis
-    );
-
     // Stop any speaking/listening if the component unmounts
     // (e.g. hot reload during development).
     return () => {
@@ -564,16 +578,7 @@ function App() {
   // INITIALIZE APPLICATION
   // ============================================================
 
-  useEffect(() => {
-    if (conversationCreatedRef.current) {
-      return;
-    }
-
-    conversationCreatedRef.current = true;
-
-    initializeChat();
-    loadDocuments();
-  }, []);
+  // (the init effect lives further down, after the functions it calls)
 
   // ============================================================
   // LOAD ALL CONVERSATIONS
@@ -874,6 +879,36 @@ function App() {
     await loadConversationMessages(id);
   }
 
+
+  async function autoTitleConversation(id, text) {
+  const current = conversations.find((item) => item.id === id);
+
+  if (!current || current.title !== "New Conversation") {
+    return;
+  }
+
+  const clean = text.replace(/\s+/g, " ").trim();
+  const title = clean.length > 40 ? `${clean.slice(0, 40)}…` : clean;
+
+  setConversations((previous) =>
+    previous.map((item) => (item.id === id ? { ...item, title } : item))
+  );
+
+  try {
+    await fetch(`${API_BASE_URL}/conversations/${id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ title }),
+    });
+  } catch (error) {
+    console.error("Auto-title error:", error);
+  }
+}
+
+
   // ============================================================
   // RENAME CONVERSATION
   // ============================================================
@@ -1013,8 +1048,6 @@ function App() {
   // ============================================================
 
   async function loadDocuments() {
-    setDocumentsLoading(true);
-
     try {
       const response = await fetch(
         `${API_BASE_URL}/documents/user/${USER_ID}`,
@@ -1045,9 +1078,28 @@ function App() {
   function openDocumentsModal() {
     setDocumentsModalOpen(true);
     setUploadError("");
+    setDocumentsLoading(true);
 
     loadDocuments();
   }
+
+  // ============================================================
+  // INITIALIZE APPLICATION
+  // (placed after initializeChat / loadDocuments are declared)
+  // ============================================================
+
+  useEffect(() => {
+    if (conversationCreatedRef.current) {
+      return;
+    }
+
+    conversationCreatedRef.current = true;
+
+    initializeChat();
+    loadDocuments();
+    // Runs once on mount (the ref guards StrictMode's double-invoke).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ============================================================
   // DOCUMENTS: UPLOAD
@@ -1674,7 +1726,7 @@ function App() {
     // USER MESSAGE
     // ========================================================
 
-    const userClientId = `user-${Date.now()}`;
+    const userClientId = newClientId("user");
 
     // Snapshot the composer's attachment chip onto this message so
     // it keeps showing (e.g. "uploading") even after the chip itself
@@ -1709,12 +1761,12 @@ function App() {
 
     setLoading(true);
 
+    autoTitleConversation(conversationId, text);
     // ========================================================
     // EMPTY ASSISTANT MESSAGE
     // ========================================================
 
-    const assistantId =
-      `assistant-${Date.now()}`;
+    const assistantId = newClientId("assistant");
 
     setMessages((previous) => [
       ...previous,
@@ -1830,7 +1882,7 @@ function App() {
                 JSON.parse(
                   jsonText
                 );
-            } catch (error) {
+            } catch {
               console.warn(
                 "Invalid streaming event:",
                 jsonText
@@ -2019,7 +2071,7 @@ function App() {
 
               applyConversationTitleUpdate(data);
             }
-          } catch (error) {
+          } catch {
             console.warn(
               "Could not parse final event:",
               jsonText

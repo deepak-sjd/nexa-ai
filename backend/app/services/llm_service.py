@@ -1,3 +1,5 @@
+import random
+import time
 from collections.abc import Generator
 
 from google import genai
@@ -8,6 +10,14 @@ from app.core.logging_config import get_logger
 
 
 logger = get_logger(__name__)
+
+
+# Temporary Gemini failures worth retrying (overloaded / rate-limited).
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+
+def is_retryable_error(error: Exception) -> bool:
+    return getattr(error, "code", None) in RETRYABLE_STATUS_CODES
 
 
 class LLMService:
@@ -148,6 +158,35 @@ class LLMService:
         return "\n\n".join(prompt_parts)
 
     # ========================================================
+    # RETRY HELPERS
+    # ========================================================
+
+    def _models_to_try(self) -> list[str]:
+        models = [settings.gemini_model]
+
+        fallback = settings.gemini_fallback_model
+
+        if fallback and fallback != settings.gemini_model:
+            models.append(fallback)
+
+        return models
+
+    def _build_config(self) -> types.GenerateContentConfig:
+        return types.GenerateContentConfig(
+            system_instruction=self.SYSTEM_INSTRUCTION,
+            max_output_tokens=8192,
+            automatic_function_calling=(
+                types.AutomaticFunctionCallingConfig(
+                    disable=True
+                )
+            ),
+        )
+
+    def _wait_before_retry(self, attempt: int) -> None:
+        # 1s, 2s, 4s ... capped at 8s, plus a little jitter.
+        time.sleep(min(2 ** (attempt - 1), 8) + random.uniform(0, 0.5))
+
+    # ========================================================
     # NORMAL RESPONSE
     # ========================================================
 
@@ -164,19 +203,43 @@ class LLMService:
             retrieved_context=retrieved_context,
         )
 
-        response = self.client.models.generate_content(
-            model=settings.gemini_model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=self.SYSTEM_INSTRUCTION,
-                max_output_tokens=8192,
-                automatic_function_calling=(
-                    types.AutomaticFunctionCallingConfig(
-                        disable=True
+        config = self._build_config()
+        attempts = max(1, settings.gemini_max_retries)
+        last_error = None
+
+        for model in self._models_to_try():
+            for attempt in range(1, attempts + 1):
+                try:
+                    response = self.client.models.generate_content(
+                        model=model,
+                        contents=prompt,
+                        config=config,
                     )
-                ),
-            ),
-        )
+                except Exception as error:
+                    if not is_retryable_error(error):
+                        raise
+
+                    last_error = error
+
+                    logger.warning(
+                        "Gemini temporarily unavailable "
+                        "(model=%s, attempt %d/%d): %s",
+                        model,
+                        attempt,
+                        attempts,
+                        error,
+                    )
+
+                    if attempt < attempts:
+                        self._wait_before_retry(attempt)
+
+                    continue
+
+                return self._extract_text(response)
+
+        raise last_error
+
+    def _extract_text(self, response) -> str:
 
         finish_reason = getattr(
             getattr(response, "candidates", [None])[0],
@@ -214,48 +277,72 @@ class LLMService:
             retrieved_context=retrieved_context,
         )
 
-        response_stream = (
-            self.client.models.generate_content_stream(
-                model=settings.gemini_model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=self.SYSTEM_INSTRUCTION,
-                    max_output_tokens=8192,
-                    automatic_function_calling=(
-                        types.AutomaticFunctionCallingConfig(
-                            disable=True
+        config = self._build_config()
+        attempts = max(1, settings.gemini_max_retries)
+        last_error = None
+
+        for model in self._models_to_try():
+            for attempt in range(1, attempts + 1):
+
+                # Only retry if nothing has been sent to the user yet,
+                # otherwise the reply would repeat itself.
+                started = False
+
+                try:
+                    response_stream = (
+                        self.client.models.generate_content_stream(
+                            model=model,
+                            contents=prompt,
+                            config=config,
                         )
-                    ),
-                ),
-            )
-        )
-
-        for chunk in response_stream:
-
-            text = getattr(
-                chunk,
-                "text",
-                None
-            )
-
-            if text:
-                yield text
-
-            candidates = getattr(chunk, "candidates", None)
-
-            if candidates:
-                finish_reason = getattr(
-                    candidates[0], "finish_reason", None
-                )
-
-                if finish_reason is not None and str(
-                    finish_reason
-                ).endswith("MAX_TOKENS"):
-                    logger.warning(
-                        "Streamed response truncated by "
-                        "max_output_tokens (finish_reason=%s)",
-                        finish_reason,
                     )
+
+                    for chunk in response_stream:
+
+                        text = getattr(chunk, "text", None)
+
+                        if text:
+                            started = True
+                            yield text
+
+                        candidates = getattr(chunk, "candidates", None)
+
+                        if candidates:
+                            finish_reason = getattr(
+                                candidates[0], "finish_reason", None
+                            )
+
+                            if finish_reason is not None and str(
+                                finish_reason
+                            ).endswith("MAX_TOKENS"):
+                                logger.warning(
+                                    "Streamed response truncated by "
+                                    "max_output_tokens "
+                                    "(finish_reason=%s)",
+                                    finish_reason,
+                                )
+
+                    return
+
+                except Exception as error:
+                    if started or not is_retryable_error(error):
+                        raise
+
+                    last_error = error
+
+                    logger.warning(
+                        "Gemini temporarily unavailable "
+                        "(model=%s, attempt %d/%d): %s",
+                        model,
+                        attempt,
+                        attempts,
+                        error,
+                    )
+
+                    if attempt < attempts:
+                        self._wait_before_retry(attempt)
+
+        raise last_error
 
 
 # ============================================================

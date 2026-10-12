@@ -8,6 +8,7 @@ Safe to run twice. Also rewrites eslint.config.js and hides the sidebar drag
 handle on phones (src/Mobile.css).
 """
 import pathlib
+import re
 import sys
 
 APP = pathlib.Path("src/App.jsx")
@@ -52,12 +53,6 @@ INIT_EFFECT = '''  function openDocumentsModal() {
 
 # (name, old, new, done_marker)  -- done_marker: text proving it's already applied
 EDITS = [
-    ("duplicate react import",
-     'import { useEffect, useRef, useState } from "react";\n'
-     'import { useEffect, useId, useRef, useState } from "react";\n',
-     'import { useEffect, useId, useRef, useState } from "react";\n',
-     None),
-
     ("CSS order: Mobile.css last",
      'import "./Mobile.css";\nimport "./Sidebar.css";\n',
      'import "./Sidebar.css";\nimport "./Mobile.css";\n',
@@ -245,9 +240,31 @@ MOBILE_RULE = """
 """
 
 
+REACT_IMPORT = 'import { useEffect, useId, useRef, useState } from "react";\n'
+REACT_IMPORT_RE = re.compile(r'^import \{[^}\n]*\} from "react";\n', re.M)
+
+
+def fix_react_import(text):
+    """Leave exactly one react import line, with useId included."""
+    matches = list(REACT_IMPORT_RE.finditer(text))
+    if not matches:
+        return text, False
+    if len(matches) == 1 and matches[0].group(0) == REACT_IMPORT:
+        print("  already   react import")
+        return text, True
+    first = matches[0].start()
+    text = REACT_IMPORT_RE.sub("", text)
+    text = text[:first] + REACT_IMPORT + text[first:]
+    print("  applied   react import (single line, with useId)")
+    return text, True
+
+
 def patch(text):
     """Returns (new_text, failed_names)."""
     failed = []
+    text, ok = fix_react_import(text)
+    if not ok:
+        failed.append("react import (no import from \"react\" found)")
     for name, old, new, done in EDITS:
         count = text.count(old)
         if done and done in text:

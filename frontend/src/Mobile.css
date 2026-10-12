@@ -569,3 +569,31 @@ a {
     display: none;
   }
 }
+
+/* Sidebar typography: serif display font + larger size, original colors kept */
+.conversation-section-label,
+.conversation-heading > span:first-child {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.8;
+}
+
+.conversation-item .conversation-title,
+.new-chat-button > span:last-child,
+.documents-button > span:not(.documents-button-count) {
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.sidebar-footer > span {
+  font-family: var(--font-display);
+  font-size: 13px;
+}
+
+.sidebar-search-input {
+  font-family: var(--font-display);
+}
