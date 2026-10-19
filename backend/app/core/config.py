@@ -5,7 +5,8 @@ class Settings(BaseSettings):
 
     app_name: str = "AI Chat Assistant API"
     app_env: str = "development"
-    debug: bool = True
+    # Verbose logging. Set DEBUG=true in your local .env only.
+    debug: bool = False
 
     database_url: str
 
@@ -15,6 +16,10 @@ class Settings(BaseSettings):
     gemini_fallback_model: str = "gemini-3.1-flash-lite"
     gemini_max_retries: int = 3
     gemini_image_model: str = "gemini-3.1-flash-image"
+
+    # Comma-separated list of frontend URLs allowed to call this API.
+    # Production example: CORS_ORIGINS=https://yourapp.com,https://www.yourapp.com
+    cors_origins: str = "http://localhost:5173,http://localhost:5174"
 
     upload_dir: str = "data/uploads"
     max_upload_size_mb: int = 20
@@ -38,6 +43,26 @@ class Settings(BaseSettings):
     # generating real images.
     mock_image_generation: bool = False
     mock_image_delay_seconds: float = 1.5
+
+    # ------------------------------------------------------------
+    # RATE LIMITING (per client IP, per minute)
+    # ------------------------------------------------------------
+    rate_limit_enabled: bool = True
+    rate_limit_chat_per_minute: int = 20
+    rate_limit_image_per_minute: int = 5
+    rate_limit_upload_per_minute: int = 10
+    # Set TRUST_PROXY_HEADERS=true only when the API sits behind your
+    # own reverse proxy / platform load balancer (Render, Railway,
+    # nginx...). Otherwise every user would look like one IP.
+    trust_proxy_headers: bool = False
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [
+            origin.strip().rstrip("/")
+            for origin in self.cors_origins.split(",")
+            if origin.strip()
+        ]
 
     model_config = SettingsConfigDict(
         env_file=".env",
