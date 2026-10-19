@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 import json
 
 from app.core.database import get_db
+from app.core.rate_limit import chat_rate_limit
 from app.core.logging_config import get_logger
 from app.models.conversation import Conversation
 from app.models.message import Message
@@ -200,6 +201,7 @@ def get_messages(
 @router.post(
     "/{conversation_id}/messages",
     response_model=list[MessageResponse],
+    dependencies=[Depends(chat_rate_limit)],
 )
 def create_message(
     conversation_id: int,
@@ -343,6 +345,7 @@ def create_message(
 
 @router.post(
     "/{conversation_id}/messages/stream",
+    dependencies=[Depends(chat_rate_limit)],
 )
 def create_message_stream(
     conversation_id: int,

@@ -14,6 +14,7 @@ from app.api.routes.message import (
 )
 from app.core.config import settings
 from app.core.database import get_db, utc_now
+from app.core.rate_limit import image_rate_limit
 from app.core.logging_config import get_logger
 from app.models.conversation import Conversation
 from app.models.message import Message
@@ -76,6 +77,7 @@ class ImageGenerateResponse(BaseModel):
 @router.post(
     "/generate",
     response_model=ImageGenerateResponse,
+    dependencies=[Depends(image_rate_limit)],
 )
 def generate_image(
     data: ImageGenerateRequest,

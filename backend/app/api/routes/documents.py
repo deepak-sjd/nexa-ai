@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.rate_limit import upload_rate_limit
 from app.core.logging_config import get_logger
 from app.models.document import Document
 from app.models.user import User
@@ -40,6 +41,7 @@ ALLOWED_EXTENSIONS = {
 @router.post(
     "/upload",
     response_model=DocumentResponse,
+    dependencies=[Depends(upload_rate_limit)],
 )
 async def upload_document(
     user_id: int,
