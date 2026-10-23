@@ -84,3 +84,4 @@ def rate_limit(name: str, max_requests: int, window_seconds: float = 60):
 chat_rate_limit = rate_limit("chat", settings.rate_limit_chat_per_minute)
 image_rate_limit = rate_limit("image", settings.rate_limit_image_per_minute)
 upload_rate_limit = rate_limit("upload", settings.rate_limit_upload_per_minute)
+auth_rate_limit = rate_limit("auth", settings.rate_limit_auth_per_minute)

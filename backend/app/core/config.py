@@ -21,6 +21,18 @@ class Settings(BaseSettings):
     # Production example: CORS_ORIGINS=https://yourapp.com,https://www.yourapp.com
     cors_origins: str = "http://localhost:5173,http://localhost:5174"
 
+    # ------------------------------------------------------------
+    # AUTH
+    # ------------------------------------------------------------
+    # Long random string used to sign login tokens. Generate one with:
+    #   python -c "import secrets; print(secrets.token_urlsafe(48))"
+    # Required in production (the app refuses to start with the default).
+    jwt_secret: str = "dev-only-secret-change-me"
+    jwt_expire_minutes: int = 60 * 24 * 7
+    # OAuth client id from Google Cloud Console (same value as the
+    # frontend's VITE_GOOGLE_CLIENT_ID). Leave empty to disable Google.
+    google_client_id: str = ""
+
     upload_dir: str = "data/uploads"
     max_upload_size_mb: int = 20
 
@@ -51,6 +63,7 @@ class Settings(BaseSettings):
     rate_limit_chat_per_minute: int = 20
     rate_limit_image_per_minute: int = 5
     rate_limit_upload_per_minute: int = 10
+    rate_limit_auth_per_minute: int = 10
     # Set TRUST_PROXY_HEADERS=true only when the API sits behind your
     # own reverse proxy / platform load balancer (Render, Railway,
     # nginx...). Otherwise every user would look like one IP.

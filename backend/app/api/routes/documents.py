@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.rate_limit import upload_rate_limit
 from app.core.logging_config import get_logger
@@ -44,17 +45,11 @@ ALLOWED_EXTENSIONS = {
     dependencies=[Depends(upload_rate_limit)],
 )
 async def upload_document(
-    user_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if user is None:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found",
-        )
+    user_id = current_user.id
 
     original_name = file.filename or "upload"
     extension = Path(original_name).suffix.lower()
@@ -191,10 +186,13 @@ async def upload_document(
 def list_documents(
     user_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    # The id in the URL is ignored on purpose: the user comes from the
+    # login token, so nobody can list someone else's documents.
     documents = (
         db.query(Document)
-        .filter(Document.user_id == user_id)
+        .filter(Document.user_id == current_user.id)
         .order_by(Document.created_at.desc())
         .all()
     )
@@ -212,10 +210,14 @@ def list_documents(
 def delete_document(
     document_row_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     document = (
         db.query(Document)
-        .filter(Document.id == document_row_id)
+        .filter(
+            Document.id == document_row_id,
+            Document.user_id == current_user.id,
+        )
         .first()
     )
 

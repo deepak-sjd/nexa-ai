@@ -7,11 +7,13 @@ from sqlalchemy.orm import Session
 from fastapi.responses import StreamingResponse
 import json
 
+from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.rate_limit import chat_rate_limit
 from app.core.logging_config import get_logger
 from app.models.conversation import Conversation
 from app.models.message import Message
+from app.models.user import User
 from app.schemas.message import MessageCreate, MessageResponse
 from app.services.llm_service import llm_service
 from app.services.rag_service import rag_service
@@ -173,11 +175,15 @@ def maybe_autotitle_conversation(
 def get_messages(
     conversation_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     # Check conversation exists
     conversation = (
         db.query(Conversation)
-        .filter(Conversation.id == conversation_id)
+        .filter(
+            Conversation.id == conversation_id,
+            Conversation.user_id == current_user.id,
+        )
         .first()
     )
 
@@ -207,11 +213,15 @@ def create_message(
     conversation_id: int,
     data: MessageCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     # 1. Check conversation exists
     conversation = (
         db.query(Conversation)
-        .filter(Conversation.id == conversation_id)
+        .filter(
+            Conversation.id == conversation_id,
+            Conversation.user_id == current_user.id,
+        )
         .first()
     )
 
@@ -351,6 +361,7 @@ def create_message_stream(
     conversation_id: int,
     data: MessageCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     # ========================================================
     # 1. CHECK CONVERSATION
@@ -359,7 +370,8 @@ def create_message_stream(
     conversation = (
         db.query(Conversation)
         .filter(
-            Conversation.id == conversation_id
+            Conversation.id == conversation_id,
+            Conversation.user_id == current_user.id,
         )
         .first()
     )

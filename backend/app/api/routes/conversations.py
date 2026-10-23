@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.user import User
 from app.models.conversation import Conversation
@@ -31,23 +32,11 @@ router = APIRouter(
 def create_conversation(
     data: ConversationCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
-    # Check that user exists
-    user = (
-        db.query(User)
-        .filter(User.id == data.user_id)
-        .first()
-    )
-
-    if user is None:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found",
-        )
-
     conversation = Conversation(
-        user_id=data.user_id,
+        user_id=current_user.id,
         title=data.title,
     )
 
@@ -69,24 +58,15 @@ def create_conversation(
 def get_user_conversations(
     user_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
-    user = (
-        db.query(User)
-        .filter(User.id == user_id)
-        .first()
-    )
-
-    if user is None:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found",
-        )
-
+    # The id in the URL is ignored on purpose: the user comes from the
+    # login token, so nobody can list someone else's chats.
     conversations = (
         db.query(Conversation)
         .filter(
-            Conversation.user_id == user_id
+            Conversation.user_id == current_user.id
         )
         .order_by(
             Conversation.is_pinned.desc(),
@@ -109,12 +89,14 @@ def get_user_conversations(
 def get_conversation(
     conversation_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     conversation = (
         db.query(Conversation)
         .filter(
-            Conversation.id == conversation_id
+            Conversation.id == conversation_id,
+            Conversation.user_id == current_user.id,
         )
         .first()
     )
@@ -140,12 +122,14 @@ def update_conversation(
     conversation_id: int,
     data: ConversationUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     conversation = (
         db.query(Conversation)
         .filter(
-            Conversation.id == conversation_id
+            Conversation.id == conversation_id,
+            Conversation.user_id == current_user.id,
         )
         .first()
     )
@@ -182,12 +166,14 @@ def update_conversation(
 def delete_conversation(
     conversation_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     conversation = (
         db.query(Conversation)
         .filter(
-            Conversation.id == conversation_id
+            Conversation.id == conversation_id,
+            Conversation.user_id == current_user.id,
         )
         .first()
     )
