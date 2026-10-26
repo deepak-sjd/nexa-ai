@@ -9,14 +9,11 @@ import "./Mobile.css";
 import { useResizableSidebar } from "./hooks/useResizableSidebar";
 
 import { API_BASE_URL } from "./services/api";
-import { useImageGeneration } from "./hooks/useImageGeneration";
-import { normalizeHistory, parseImageCommand } from "./utils/imageMessage";
-import GeneratedImage from "./components/GeneratedImage";
-import {
-  ImageErrorCard,
-  ImageGeneratingCard,
-} from "./components/ImageStatusCards";
-import { ImageIcon, AlertIcon, RefreshIcon } from "./components/ImageIcons";
+import { authFetch } from "./services/auth";
+import { useAuth } from "./context/useAuth";
+import { normalizeHistory } from "./utils/imageMessage";
+import { ImageErrorCard } from "./components/ImageStatusCards";
+import { AlertIcon, RefreshIcon } from "./components/ImageIcons";
 import { MoonIcon, SparkleThemeIcon } from "./components/ThemeIcons";
 import { PlusIcon, DocumentPlusIcon } from "./components/ComposerIcons";
 
@@ -300,16 +297,14 @@ const EXAMPLE_PROMPTS = [
       "Summarize the difference between embeddings and reranking.",
   },
   {
-    label: "Create an image",
+    label: "Explain a topic simply",
     prompt:
-      "A serene mountain lake at sunrise, soft watercolor style",
-    mode: "image",
+      "Explain how vector databases work in simple terms.",
   },
   {
-    label: "Design a logo",
+    label: "Draw a sequence diagram",
     prompt:
-      "A minimal logo for a coffee shop called Ember, flat vector, warm colors",
-    mode: "image",
+      "Show me a sequence diagram of how a chat message flows through this system.",
   },
 ];
 
@@ -325,9 +320,9 @@ function EmptyState({ onPromptClick }) {
       </h1>
 
       <p className="empty-state-subtitle">
-        Ask a question, upload a document, request a
-        diagram, or create an image — NEXA AI grounds its
-        answers in what it actually knows.
+        Ask a question, upload a document, or request a
+        diagram — NEXA AI grounds its answers in what it
+        actually knows.
       </p>
 
       <div className="empty-state-prompts">
@@ -354,6 +349,12 @@ function newClientId(prefix) {
 }
 
 function App() {
+  const { user, logout } = useAuth();
+
+  const userInitial = (user?.name || user?.email || "U")
+    .charAt(0)
+    .toUpperCase();
+
   // ============================================================
   // STATE
   // ============================================================
@@ -417,11 +418,6 @@ function App() {
 
   const [speakingMessageId, setSpeakingMessageId] =
     useState(null);
-
-  // When on, the next message is sent to the image endpoint
-  // instead of the chat endpoint. One-shot: it switches itself
-  // off after sending so a stray Enter never costs an image.
-  const [imageMode, setImageMode] = useState(false);
 
   // The "+" menu in the composer (Upload document / Create image) —
   // same open/close-on-outside-click pattern as the per-conversation
@@ -492,16 +488,7 @@ function App() {
   // IMAGE GENERATION
   // ============================================================
 
-  const {
-    generate: generateImage,
-    cancel: cancelImageGeneration,
-    retry: retryImageGeneration,
-  } = useImageGeneration({
-    conversationId,
-    setMessages,
-    setLoading,
-    onConversationUpdate: applyConversationTitleUpdate,
-  });
+  // (Image generation was removed from this app.)
 
   // ============================================================
   // AUTO SCROLL
@@ -586,7 +573,7 @@ function App() {
 
   async function loadConversations() {
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/conversations/user/${USER_ID}`,
         {
           method: "GET",
@@ -681,7 +668,7 @@ function App() {
     customTitle = "New Conversation"
   ) {
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/conversations`,
         {
           method: "POST",
@@ -751,7 +738,7 @@ function App() {
     conversationIdToLoad
   ) {
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/conversations/${conversationIdToLoad}/messages`,
         {
           method: "GET",
@@ -820,7 +807,10 @@ function App() {
 
       // normalizeHistory also pulls generated images out of
       // message content and attaches each image's prompt.
-      setMessages(normalizeHistory(data));
+      // Old generated-image messages are dropped (feature removed).
+      setMessages(
+        normalizeHistory(data).filter((message) => !message.image)
+      );
     } catch (error) {
       console.error(
         "Conversation history loading error:",
@@ -895,7 +885,7 @@ function App() {
   );
 
   try {
-    await fetch(`${API_BASE_URL}/conversations/${id}`, {
+    await authFetch(`${API_BASE_URL}/conversations/${id}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -930,7 +920,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/conversations/${conversationIdToRename}`,
         {
           method: "PATCH",
@@ -993,7 +983,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/conversations/${conversationIdToDelete}`,
         {
           method: "DELETE",
@@ -1049,7 +1039,7 @@ function App() {
 
   async function loadDocuments() {
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/documents/user/${USER_ID}`,
         {
           method: "GET",
@@ -1126,7 +1116,7 @@ function App() {
     formData.append("file", file);
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/documents/upload?user_id=${USER_ID}`,
         {
           method: "POST",
@@ -1226,7 +1216,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/documents/${documentRowId}`,
         {
           method: "DELETE",
@@ -1265,7 +1255,7 @@ function App() {
     );
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/conversations/${conversation.id}`,
         {
           method: "PATCH",
@@ -1410,9 +1400,7 @@ function App() {
   // AUTO RESIZE TEXTAREA
   // ============================================================
 
-  function handleExamplePromptClick(promptText, mode) {
-    setImageMode(mode === "image");
-
+  function handleExamplePromptClick(promptText) {
     setInput(promptText);
 
     requestAnimationFrame(() => {
@@ -1469,12 +1457,6 @@ function App() {
   // (its final height isn't known until then)
   // ============================================================
 
-  function handleImageLoaded() {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "auto",
-      block: "end",
-    });
-  }
 
   // ============================================================
   // COPY AI RESPONSE
@@ -1688,37 +1670,8 @@ function App() {
     }
 
     // ========================================================
-    // IMAGE REQUEST ("image mode" toggle or /image command)
+    // STOP ANY SPEECH
     // ========================================================
-
-    const imageCommand = parseImageCommand(text);
-
-    if (imageMode || imageCommand) {
-      const imagePrompt = imageCommand ? imageCommand.prompt : text;
-
-      setInput("");
-
-      resetTextarea();
-
-      if (!imagePrompt) {
-        // A bare "/image" just switches the composer to image mode.
-        setImageMode(true);
-
-        return;
-      }
-
-      stopSpeaking();
-
-      setImageMode(false);
-
-      // Image mode and a composer attachment don't really combine —
-      // drop the (unrelated) chip so it doesn't linger stale.
-      setAttachedFile(null);
-
-      generateImage(imagePrompt);
-
-      return;
-    }
 
     stopSpeaking();
 
@@ -1783,7 +1736,7 @@ function App() {
       // STREAMING API REQUEST
       // ======================================================
 
-      const response = await fetch(
+      const response = await authFetch(
         `${API_BASE_URL}/conversations/${conversationId}/messages/stream`,
         {
           method: "POST",
@@ -2109,7 +2062,7 @@ function App() {
 
   // ============================================================
   // RETRY A FAILED CHAT MESSAGE
-  // (mirrors retryImageGeneration: drop the failed pair, resend)
+  // (drops the failed pair, then resends)
   // ============================================================
 
   function retryChatMessage(failedClientId, promptText) {
@@ -2156,10 +2109,6 @@ function App() {
   // ============================================================
   // CURRENT CONVERSATION
   // ============================================================
-
-  const isCreatingImage = messages.some(
-    (message) => message.kind === "image-pending"
-  );
 
   const currentConversation =
     conversations.find(
@@ -2512,6 +2461,15 @@ function App() {
             NEXA AI is online
           </span>
 
+          <button
+            type="button"
+            className="sidebar-logout"
+            onClick={logout}
+            title={user?.email}
+          >
+            Log out
+          </button>
+
         </div>
 
       </aside>
@@ -2687,40 +2645,6 @@ function App() {
                                   message.clientId,
                                   message.prompt
                                 )
-                              }
-                            />
-                          ) : message.kind === "image-pending" ? (
-                            <ImageGeneratingCard
-                              startedAt={message.startedAt}
-                              onCancel={cancelImageGeneration}
-                            />
-                          ) : message.kind === "image-error" ? (
-                            <ImageErrorCard
-                              message={message.error}
-                              cancelled={message.cancelled}
-                              retryDisabled={loading}
-                              onRetry={() =>
-                                retryImageGeneration(
-                                  message.clientId,
-                                  message.prompt
-                                )
-                              }
-                            />
-                          ) : message.image ? (
-                            <GeneratedImage
-                              src={message.image.src}
-                              prompt={message.image.prompt}
-                              caption={message.content}
-                              onRegenerate={generateImage}
-                              regenerateDisabled={loading}
-                              // Only freshly generated images (which
-                              // have a clientId) re-scroll on load;
-                              // history images lazy-load as you
-                              // scroll up and must not yank the view.
-                              onLoad={
-                                message.clientId
-                                  ? handleImageLoaded
-                                  : undefined
                               }
                             />
                           ) : message.content ? (
@@ -2954,7 +2878,7 @@ function App() {
 
                     {isUser && (
                       <div className="avatar user-avatar">
-                        D
+                        {userInitial}
                       </div>
                     )}
 
@@ -3069,22 +2993,6 @@ function App() {
 
                     Upload document
                   </button>
-
-                  <button
-                    type="button"
-                    className="composer-menu-item"
-                    onClick={() => {
-                      setComposerMenuOpen(false);
-                      setImageMode(true);
-                      textareaRef.current?.focus();
-                    }}
-                  >
-                    <span className="composer-menu-icon">
-                      <ImageIcon size={16} />
-                    </span>
-
-                    Create image
-                  </button>
                 </div>
               )}
             </div>
@@ -3097,8 +3005,6 @@ function App() {
               placeholder={
                 isListening
                   ? "Listening..."
-                  : imageMode
-                  ? "Describe the image you want to create..."
                   : conversationId
                   ? "Ask NEXA AI anything..."
                   : "Connecting to NEXA AI..."
@@ -3106,24 +3012,6 @@ function App() {
               rows="1"
               disabled={!conversationId}
             />
-
-            <button
-              type="button"
-              className="image-toggle-button"
-              onClick={() => setImageMode((current) => !current)}
-              aria-pressed={imageMode}
-              disabled={!conversationId || loading}
-              aria-label={
-                imageMode ? "Turn off image mode" : "Create an image"
-              }
-              title={
-                imageMode
-                  ? "Image mode on — click to turn off"
-                  : "Create an image"
-              }
-            >
-              <ImageIcon />
-            </button>
 
             {speechSupported && (
               <button
@@ -3156,7 +3044,7 @@ function App() {
                 !input.trim() ||
                 !conversationId
               }
-              aria-label={imageMode ? "Create image" : "Send message"}
+              aria-label="Send message"
             >
               ➤
             </button>
@@ -3168,18 +3056,9 @@ function App() {
             {isUploading ? (
               "Uploading document..."
             ) : loading ? (
-              isCreatingImage ? (
-                "Creating your image..."
-              ) : (
-                "NEXA AI is generating a response..."
-              )
-            ) : imageMode ? (
-              <>
-                <span className="input-hint-mode">Image mode</span>
-                {" • Enter to create • Shift + Enter for a new line"}
-              </>
+              "NEXA AI is generating a response..."
             ) : (
-              "Enter to send • Shift + Enter for a new line • /image to create an image"
+              "Enter to send • Shift + Enter for a new line"
             )}
 
           </p>

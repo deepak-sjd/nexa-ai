@@ -26,3 +26,7 @@ Thumbs.db
 
 # Logs
 *.log
+# Backups and local data
+*.bak
+*.bak2
+backend/data/
