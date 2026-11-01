@@ -18,6 +18,7 @@ from app.schemas.auth import (
     LoginRequest,
     RegisterRequest,
     TokenResponse,
+    UpdateProfileRequest,
 )
 
 logger = get_logger(__name__)
@@ -104,6 +105,7 @@ def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
     google_sub = info["sub"]
     email = info["email"].strip().lower()
     name = info.get("name")
+    picture = info.get("picture")
 
     user = db.query(User).filter(User.google_sub == google_sub).first()
 
@@ -132,6 +134,10 @@ def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
     if not user.name and name:
         user.name = name
 
+    # Use the Google photo unless the user has set their own.
+    if not user.avatar_url and picture:
+        user.avatar_url = picture
+
     db.commit()
     db.refresh(user)
 
@@ -140,4 +146,22 @@ def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=AuthUser)
 def me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@router.patch("/me", response_model=AuthUser)
+def update_me(
+    data: UpdateProfileRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if data.name is not None:
+        current_user.name = data.name.strip() or None
+
+    if data.avatar is not None:
+        current_user.avatar_url = data.avatar or None
+
+    db.commit()
+    db.refresh(current_user)
+
     return current_user

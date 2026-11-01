@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.core.rate_limit import chat_rate_limit
 from app.core.logging_config import get_logger
 from app.models.conversation import Conversation
+from app.models.document import Document
 from app.models.message import Message
 from app.models.user import User
 from app.schemas.message import MessageCreate, MessageResponse
@@ -59,6 +60,18 @@ def history_text(message: Message) -> str:
         return f"{content.strip()}\n{IMAGE_HISTORY_NOTE}".strip()
 
     return message.content or ""
+
+
+def get_user_document_ids(db: Session, user_id: int) -> set[str]:
+    """Ids of the documents this user uploaded - the only ones whose
+    text may be searched for them."""
+    rows = (
+        db.query(Document.document_id)
+        .filter(Document.user_id == user_id)
+        .all()
+    )
+
+    return {row[0] for row in rows}
 
 
 def extract_sources(
@@ -253,6 +266,7 @@ def create_message(
         query=data.content,
         retrieval_top_k=12,
         rerank_top_k=8,
+        allowed_document_ids=get_user_document_ids(db, current_user.id),
     )
 
     retrieved_context = rag_result["context"]
@@ -415,6 +429,7 @@ def create_message_stream(
         query=data.content,
         retrieval_top_k=12,
         rerank_top_k=8,
+        allowed_document_ids=get_user_document_ids(db, current_user.id),
     )
     retrieved_context = rag_result["context"]
 

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, DateTime, String, Text
 from sqlalchemy.sql import expression
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -51,4 +51,11 @@ class User(Base):
         default=False,
         server_default=expression.false(),
         nullable=False,
+    )
+
+    # Profile picture: a Google image URL, or a small data: URL saved when
+    # the user uploads a photo (no file storage needed on free hosts).
+    avatar_url: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
     )
