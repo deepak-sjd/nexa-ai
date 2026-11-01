@@ -302,10 +302,23 @@ class VectorStore:
     # SEARCH
     # ============================================================
 
+    @staticmethod
+    def _is_visible(
+        metadata: dict[str, Any],
+        allowed_document_ids: set[str] | None,
+    ) -> bool:
+        """None = no filtering. Otherwise a chunk is only visible if its
+        document belongs to the asking user."""
+        if allowed_document_ids is None:
+            return True
+
+        return str(metadata.get("document_id", "")) in allowed_document_ids
+
     def search(
         self,
         embedding: list[float],
         top_k: int = 5,
+        allowed_document_ids: set[str] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Search FAISS using a pre-compute query embedding.
@@ -328,9 +341,18 @@ class VectorStore:
    # Normalize for cosine similarity
         faiss.normalize_L2(query_vector)
 
+        # When filtering by owner, look at every vector and keep the
+        # first top_k visible ones, so other users' chunks can never
+        # crowd the asking user's chunks out of the results.
+        search_count = (
+            self.index.ntotal
+            if allowed_document_ids is not None
+            else min(top_k, self.index.ntotal)
+        )
+
         scores, indices = self.index.search(
             query_vector,
-            min(top_k, self.index.ntotal),
+            search_count,
         )
 
         results = []
@@ -348,6 +370,9 @@ class VectorStore:
 
             metadata = self.metadata[index_id].copy()
 
+            if not self._is_visible(metadata, allowed_document_ids):
+                continue
+
             results.append(
                 {
                     "content": metadata.get(
@@ -358,6 +383,9 @@ class VectorStore:
                     "metadata": metadata,
                 }
             )
+
+            if len(results) >= top_k:
+                break
 
         return results
 

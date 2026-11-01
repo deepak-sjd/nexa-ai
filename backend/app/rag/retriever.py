@@ -84,6 +84,7 @@ class Retriever:
         self,
         query_embedding: list[float],
         top_k: int,
+        allowed_document_ids: set[str] | None = None,
     ) -> list[dict[str, Any]]:
 
         if self.vector_store is None:
@@ -116,6 +117,7 @@ class Retriever:
         results = self.vector_store.search(
             embedding=query_embedding,
             top_k=top_k,
+            allowed_document_ids=allowed_document_ids,
         )
 
         if not results:
@@ -257,6 +259,7 @@ class Retriever:
         self,
         query: str,
         top_k: int | None = None,
+        allowed_document_ids: set[str] | None = None,
     ) -> list[RetrievalResult]:
         """
         Retrieve the most relevant knowledge for a query.
@@ -307,6 +310,7 @@ class Retriever:
             self._search_vector_store(
                 query_embedding=query_embedding,
                 top_k=candidate_count,
+                allowed_document_ids=allowed_document_ids,
             )
         )
 
