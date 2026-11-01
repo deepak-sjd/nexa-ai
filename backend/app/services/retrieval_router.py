@@ -22,6 +22,29 @@ _DOCUMENT_HINT_RE = re.compile(
 )
 
 
+# Words that make up pure chit-chat ("great, have a sweet night nexa").
+# If EVERY word of a short message is in this set (and there's no
+# question mark or document hint), there is nothing to look up.
+_SMALLTALK_WORDS = frozenset(
+    "hi hello hey yo sup thanks thank thx ty ok okay cool great nice "
+    "awesome good fine well bye goodbye night morning evening afternoon "
+    "sweet welcome lol haha yes no yeah yep nope sure please nexa you "
+    "very much so have a an the and i it is that for your my me we "
+    "help rest take care see later tomorrow dream dreams wonderful "
+    "excellent perfect amazing got appreciate it's thats that's "
+    "lovely best wishes day weekend enjoy lot lots really truly many "
+    "bunch again too also".split()
+)
+
+
+def _is_smalltalk(text: str) -> bool:
+    words = re.findall(r"[a-z']+", text.lower())
+
+    return 0 < len(words) <= 12 and all(
+        word in _SMALLTALK_WORDS for word in words
+    )
+
+
 def should_retrieve(query: str) -> bool:
     """
     Decide whether a message needs document retrieval at all.
@@ -42,6 +65,8 @@ def should_retrieve(query: str) -> bool:
 
     if _DOCUMENT_HINT_RE.search(text):
         return True
+    if "?" not in text and _is_smalltalk(text):
+        return False
 
     # Short, generic questions with no document signal and no
     # question mark are more often smalltalk than a real query.

@@ -59,6 +59,7 @@ class RAGService:
         self,
         query: str,
         top_k: int = 8,
+        allowed_document_ids: set[str] | None = None,
     ) -> list[Any]:
         """
         Retrieve relevant chunks from the vector store.
@@ -70,6 +71,7 @@ class RAGService:
         return self.retriever.retrieve(
             query=query.strip(),
             top_k=top_k,
+            allowed_document_ids=allowed_document_ids,
         )
 
     # ============================================================
@@ -126,6 +128,7 @@ class RAGService:
         query: str,
         retrieval_top_k: int = 8,
         rerank_top_k: int = 5,
+        allowed_document_ids: set[str] | None = None,
     ) -> dict[str, Any]:
         """
         Execute the complete RAG pipeline.
@@ -157,6 +160,7 @@ class RAGService:
         retrieved_results = self.retrieve(
             query=query,
             top_k=retrieval_top_k,
+            allowed_document_ids=allowed_document_ids,
         )
 
         # --------------------------------------------------------
@@ -193,6 +197,7 @@ class RAGService:
         query: str,
         retrieval_top_k: int = 8,
         rerank_top_k: int = 5,
+        allowed_document_ids: set[str] | None = None,
     ) -> dict[str, Any]:
         """
         Like search(), but:
@@ -221,6 +226,15 @@ class RAGService:
         if not should_retrieve(query):
             return {**empty, "skipped": True, "skip_reason": "not_relevant"}
 
+        # Owner filtering: a user with no documents has nothing to
+        # search, so skip the embedding call entirely.
+        if allowed_document_ids is not None and not allowed_document_ids:
+            return {
+                **empty,
+                "skipped": True,
+                "skip_reason": "no_documents_indexed",
+            }
+
         try:
             has_documents = self.retriever.vector_store.count() > 0
         except Exception as e:
@@ -241,6 +255,7 @@ class RAGService:
                 query=query,
                 retrieval_top_k=retrieval_top_k,
                 rerank_top_k=rerank_top_k,
+                allowed_document_ids=allowed_document_ids,
             )
             return {**result, "skipped": False, "skip_reason": None}
         except Exception as e:
