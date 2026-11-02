@@ -130,3 +130,23 @@ export async function fetchMe() {
 
   return response.json();
 }
+
+/** Update the signed-in user's name and/or photo (data URL, "" = remove). */
+export async function updateProfileRequest(payload) {
+  const response = await authFetch(`${API_BASE_URL}/auth/me`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(data, response.status));
+  }
+
+  return data;
+}

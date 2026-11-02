@@ -10,6 +10,7 @@ import {
   loginWithGoogle,
   register,
   setToken,
+  updateProfileRequest,
 } from "../services/auth";
 
 export default function AuthProvider({ children }) {
@@ -85,6 +86,14 @@ export default function AuthProvider({ children }) {
     [finish]
   );
 
+  const updateProfile = useCallback(async (payload) => {
+    const user = await updateProfileRequest(payload);
+
+    setState((current) => ({ ...current, user }));
+
+    return user;
+  }, []);
+
   const logout = useCallback(() => {
     clearToken();
     window.google?.accounts?.id?.disableAutoSelect?.();
@@ -98,9 +107,10 @@ export default function AuthProvider({ children }) {
       signIn,
       signUp,
       signInWithGoogle,
+      updateProfile,
       logout,
     }),
-    [state, signIn, signUp, signInWithGoogle, logout]
+    [state, signIn, signUp, signInWithGoogle, updateProfile, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
