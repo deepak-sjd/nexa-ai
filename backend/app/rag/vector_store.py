@@ -1,36 +1,43 @@
-from pathlib import Path
-import json
+import functools
+import threading
 from typing import Any
 
 import faiss
 import numpy as np
 
+from app.core.database import SessionLocal
+from app.models.vector_chunk import VectorChunk
 from app.rag.embeddings import embedding_service
+
+
+def _locked(method):
+    """FAISS is not thread-safe and FastAPI runs routes in a thread
+    pool, so every read/write of the in-memory index takes this lock."""
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper
 
 
 class VectorStore:
     """
-    Persistent FAISS vector store.
+    FAISS vector store that persists to the database.
 
-    Responsibilities:
-    - Store document embeddings
-    - Store chunk metadata
-    - Persist FAISS index to disk
-    - Search for semantically similar chunks
+    - Search runs on an in-memory FAISS index (fast).
+    - Every chunk and its embedding is also saved in the
+      `vector_chunks` table, and the index is rebuilt from that table
+      on start-up - so nothing is lost when the server restarts or the
+      host wipes its disk.
+
+    Run the API with a single worker process: each worker would keep
+    its own in-memory copy of the index.
     """
 
-    def __init__(
-        self,
-        index_path: str = "data/vector_store/index.faiss",
-        metadata_path: str = "data/vector_store/metadata.json",
-    ):
-        self.index_path = Path(index_path)
-        self.metadata_path = Path(metadata_path)
-
-        self.index_path.parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
+    def __init__(self):
+        self._lock = threading.RLock()
 
         self.index = None
         self.metadata: list[dict[str, Any]] = []
@@ -38,60 +45,90 @@ class VectorStore:
         self._load()
 
     # ============================================================
-    # LOAD EXISTING STORE
+    # LOAD FROM DATABASE
     # ============================================================
 
     def _load(self):
         """
-        Load existing FAISS index and metadata.
+        Rebuild the in-memory index from the vector_chunks table.
         """
-
-        if (
-            self.index_path.exists()
-            and self.metadata_path.exists()
-        ):
-            self.index = faiss.read_index(
-                str(self.index_path)
-            )
-
-            with open(
-                self.metadata_path,
-                "r",
-                encoding="utf-8",
-            ) as file:
-                self.metadata = json.load(file)
-
-            return
 
         self.index = None
         self.metadata = []
 
-    # ============================================================
-    # SAVE STORE
-    # ============================================================
-
-    def _save(self):
-        """
-        Persist FAISS index and metadata.
-        """
-
-        if self.index is not None:
-            faiss.write_index(
-                self.index,
-                str(self.index_path),
+        with SessionLocal() as session:
+            rows = (
+                session.query(VectorChunk)
+                .order_by(VectorChunk.id)
+                .all()
             )
 
-        with open(
-            self.metadata_path,
-            "w",
-            encoding="utf-8",
-        ) as file:
-            json.dump(
-                self.metadata,
-                file,
-                ensure_ascii=False,
-                indent=2,
+        if not rows:
+            return
+
+        vectors = np.vstack(
+            [
+                np.frombuffer(row.embedding, dtype="float32")
+                for row in rows
+            ]
+        )
+
+        self.index = faiss.IndexFlatIP(vectors.shape[1])
+        self.index.add(vectors)
+
+        self.metadata = [
+            {
+                "vector_id": position,
+                "document_id": row.document_id,
+                "source": row.source,
+                "chunk_index": row.chunk_index,
+                "content": row.content,
+            }
+            for position, row in enumerate(rows)
+        ]
+
+    # ============================================================
+    # DATABASE WRITES
+    # ============================================================
+
+    @staticmethod
+    def _to_rows(
+        vectors: np.ndarray,
+        metadata: list[dict[str, Any]],
+    ) -> list[VectorChunk]:
+        return [
+            VectorChunk(
+                document_id=entry.get("document_id"),
+                source=entry.get("source", ""),
+                chunk_index=entry.get("chunk_index", 0),
+                content=entry.get("content", ""),
+                embedding=np.asarray(
+                    vectors[position],
+                    dtype="float32",
+                ).tobytes(),
             )
+            for position, entry in enumerate(metadata)
+        ]
+
+    def _replace_all_rows(self):
+        """
+        Make the table match the in-memory index exactly.
+        """
+
+        with SessionLocal() as session:
+            session.query(VectorChunk).delete()
+
+            if self.index is not None and self.index.ntotal > 0:
+                vectors = self.index.reconstruct_n(
+                    0,
+                    self.index.ntotal,
+                )
+
+                session.add_all(
+                    self._to_rows(vectors, self.metadata)
+                )
+
+            session.commit()
 
     # ============================================================
     # ADD DOCUMENT CHUNKS
@@ -104,13 +141,15 @@ class VectorStore:
         document_id: str | None = None,
     ):
         """
-        Convert chunks into embeddings and add them
-        to the FAISS index.
+        Convert chunks into embeddings, save them to the database and
+        add them to the FAISS index.
         """
 
         if not chunks:
             return
 
+        # The slow part (embedding API) runs WITHOUT the lock, so other
+        # users can keep searching while a document is indexed.
         embeddings = embedding_service.embed_documents(
             chunks
         )
@@ -120,55 +159,48 @@ class VectorStore:
             dtype="float32",
         )
 
-        # --------------------------------------------------------
-        # Create index on first insertion
-        # --------------------------------------------------------
+        # Normalize so inner product behaves like cosine similarity.
+        faiss.normalize_L2(vectors)
 
-        if self.index is None:
+        self._append(vectors, chunks, source, document_id)
 
-            dimension = vectors.shape[1]
-
-            self.index = faiss.IndexFlatIP(
-                dimension
-            )
-
-            # Normalize vectors so inner product
-            # behaves like cosine similarity.
-            faiss.normalize_L2(vectors)
-
-            self.index.add(vectors)
-
-        else:
-
-            # Normalize before adding
-            faiss.normalize_L2(vectors)
-
-            self.index.add(vectors)
-
-        # --------------------------------------------------------
-        # Store metadata
-        # --------------------------------------------------------
-
+    @_locked
+    def _append(
+        self,
+        vectors: np.ndarray,
+        chunks: list[str],
+        source: str,
+        document_id: str | None,
+    ):
         start_id = len(self.metadata)
 
-        for offset, chunk in enumerate(chunks):
+        new_metadata = [
+            {
+                "vector_id": start_id + offset,
+                "document_id": document_id,
+                "source": source,
+                "chunk_index": offset,
+                "content": chunk,
+            }
+            for offset, chunk in enumerate(chunks)
+        ]
 
-            self.metadata.append(
-                {
-                    "vector_id": start_id + offset,
-                    "document_id": document_id,
-                    "source": source,
-                    "chunk_index": offset,
-                    "content": chunk,
-                }
-            )
+        # Database first: if it fails, memory stays unchanged.
+        with SessionLocal() as session:
+            session.add_all(self._to_rows(vectors, new_metadata))
+            session.commit()
 
-        self._save()
+        if self.index is None:
+            self.index = faiss.IndexFlatIP(vectors.shape[1])
+
+        self.index.add(vectors)
+        self.metadata.extend(new_metadata)
 
     # ============================================================
     # GET STORED VECTOR (NO RECOMPUTATION)
     # ============================================================
 
+    @_locked
     def get_vector(self, vector_id: int) -> list[float]:
         """
         Return the already-stored (normalized) vector for a given
@@ -223,9 +255,11 @@ class VectorStore:
     # REBUILD FROM (VECTOR, METADATA) PAIRS
     # ============================================================
 
+    @_locked
     def rebuild(
         self,
         entries: list[tuple[list[float], dict[str, Any]]],
+        persist: bool = True,
     ):
         """
         Rebuild the entire index from a list of
@@ -241,7 +275,8 @@ class VectorStore:
         self.metadata = []
 
         if not entries:
-            self._save()
+            if persist:
+                self._replace_all_rows()
             return
 
         vectors = np.asarray(
@@ -261,12 +296,14 @@ class VectorStore:
 
             self.metadata.append(entry)
 
-        self._save()
+        if persist:
+            self._replace_all_rows()
 
     # ============================================================
     # REMOVE ONE DOCUMENT'S CHUNKS
     # ============================================================
 
+    @_locked
     def remove_document(self, document_id: str) -> int:
         """
         Remove all chunks belonging to a given document_id and
@@ -294,7 +331,13 @@ class VectorStore:
         if removed_count == 0:
             return 0
 
-        self.rebuild(kept_entries)
+        with SessionLocal() as session:
+            session.query(VectorChunk).filter(
+                VectorChunk.document_id == document_id
+            ).delete()
+            session.commit()
+
+        self.rebuild(kept_entries, persist=False)
 
         return removed_count
 
@@ -314,6 +357,7 @@ class VectorStore:
 
         return str(metadata.get("document_id", "")) in allowed_document_ids
 
+    @_locked
     def search(
         self,
         embedding: list[float],
@@ -393,6 +437,7 @@ class VectorStore:
     # COUNT
     # ============================================================
 
+    @_locked
     def count(self) -> int:
         """
         Return number of indexed chunks.
@@ -407,23 +452,18 @@ class VectorStore:
     # CLEAR
     # ============================================================
 
+    @_locked
     def clear(self):
         """
-        Delete the current vector index and metadata.
+        Delete every chunk (memory and database).
         """
 
         self.index = None
         self.metadata = []
 
-        if self.index_path.exists():
-            self.index_path.unlink()
+        with SessionLocal() as session:
+            session.query(VectorChunk).delete()
+            session.commit()
 
-        if self.metadata_path.exists():
-            self.metadata_path.unlink()
-
-
-# ================================================================
-# SHARED INSTANCE
-# ================================================================
 
 vector_store = VectorStore()
